@@ -33,6 +33,14 @@ import {
   deleteTaskHandler,
 } from "../controllers/taskController.js";
 
+import {
+  getAssignableEmployees,
+  assignTaskToEmployee,
+  getMyAssignedTasks,
+  getTasksIAssigned,
+  respondToAssignedTask,
+} from "../controllers/assignedTaskController.js";
+
 const router = express.Router();
 
 // ✅ All employee routes require valid token + EMPLOYEE role
@@ -144,7 +152,7 @@ router.post(
 );
 
 // ==========================
-// TASK UPDATE SYSTEM (SELF CRUD)
+// DAILY TASK UPDATE (SELF CRUD)
 // ==========================
 
 // SAVE (DRAFT)
@@ -175,13 +183,50 @@ router.patch(
   updateTaskHandler
 );
 
-// ==========================
-// TASK DELETE (FOR VIEWERS / MANAGERS)
-// ==========================
+// DELETE TASK FROM VIEW (for managers / viewers)
 router.delete(
   "/task/:taskId",
   employeePermission("TASK_VIEW"),
   deleteTaskHandler
+);
+
+// ==========================
+// ASSIGNED TASK SYSTEM
+// ==========================
+
+// 1) Dropdown list of employees (same company)
+router.get(
+  "/assignable/employees",
+  employeePermission("TASK_ASSIGN"),
+  getAssignableEmployees
+);
+
+// 2) Create / assign a task to another employee
+router.post(
+  "/assigned/create",
+  employeePermission("TASK_ASSIGN"),
+  assignTaskToEmployee
+);
+
+// 3) Outbox – tasks I assigned
+router.get(
+  "/assigned/outbox",
+  employeePermission("TASK_ASSIGN"),
+  getTasksIAssigned
+);
+
+// 4) Inbox – tasks assigned to me
+router.get(
+  "/assigned/inbox",
+  employeePermission("TASK_INBOX"),
+  getMyAssignedTasks
+);
+
+// 5) Respond (accept / reject) to assigned task
+router.patch(
+  "/assigned/:taskId/respond",
+  employeePermission("TASK_INBOX"),
+  respondToAssignedTask
 );
 
 export default router;
