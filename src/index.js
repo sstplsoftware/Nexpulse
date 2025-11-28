@@ -61,7 +61,12 @@ app.use("/api/employee", employeeRoutes);
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 
 app.get("/", (req, res) => {
-  res.send("NexPulse CRM Backend is Running 🚀");
+  res.json({
+    status: "running",
+    message: "NexPulse CRM Backend is Live 🚀",
+    docs: "/api/health",
+    version: "1.0.0"
+  });
 });
 
 const PORT = process.env.PORT || 5000;
