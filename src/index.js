@@ -21,6 +21,9 @@ import adminRoutes from "./routes/adminRoutes.js";
 import adminEmployeeRoutes from "./routes/adminEmployeeRoutes.js";
 import employeeRoutes from "./routes/employeeRoutes.js";
 
+// Bell Call
+import bellRoutes from "./routes/bellRoutes.js";
+
 const app = express();
 
 // ------------------------------
@@ -56,6 +59,9 @@ app.use("/api/superadmin", superadminRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminEmployeeRoutes);
 app.use("/api/employee", employeeRoutes);
+
+//bell
+app.use("/api/bell", bellRoutes);
 
 // Health
 app.get("/api/health", (req, res) => res.json({ ok: true }));
