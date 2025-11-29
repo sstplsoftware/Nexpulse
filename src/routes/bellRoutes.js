@@ -17,33 +17,39 @@ const router = express.Router();
 // all bell routes require login
 router.use(authMiddleware);
 
-// get list of employees/admins that can receive bell
+// ===============================
+// ONLY THESE REQUIRE PERMISSION
+// ===============================
+
 router.get(
   "/targets",
-  roleMiddleware(["admin", "employee"]),
+  roleMiddleware(["ADMIN", "EMPLOYEE"]),
   employeePermission("BELL_RING"),
   getBellTargets
 );
 
-// send bell from admin/employee -> others
 router.post(
   "/ring",
-  roleMiddleware(["admin", "employee"]),
+  roleMiddleware(["ADMIN", "EMPLOYEE"]),
   employeePermission("BELL_RING"),
   sendBell
 );
 
-// current user: check if any active bell for me
+// ===============================
+// ❌ NO PERMISSION REQUIRED HERE
+// ===============================
+
+// anyone logged in can check bell status
 router.get(
   "/me/active",
-  roleMiddleware(["admin", "employee"]),
+  roleMiddleware(["ADMIN", "EMPLOYEE"]),
   getMyActiveBell
 );
 
-// stop bell (current user)
+// anyone logged in can stop ringing
 router.post(
   "/stop/:bellId",
-  roleMiddleware(["admin", "employee"]),
+  roleMiddleware(["ADMIN", "EMPLOYEE"]),
   stopBell
 );
 
