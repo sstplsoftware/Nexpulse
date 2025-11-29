@@ -14,36 +14,40 @@ import {
 
 const router = express.Router();
 
-// all bell routes require login
+// All bell routes need user logged in
 router.use(authMiddleware);
 
-// get list of employees/admins that can receive bell
+// =============================
+// ONLY send & targets need permission
+// =============================
+
 router.get(
   "/targets",
-  roleMiddleware(["admin", "employee"]),
+  roleMiddleware(["ADMIN", "EMPLOYEE"]),
   employeePermission("BELL_RING"),
   getBellTargets
 );
 
-// send bell from admin/employee -> others
 router.post(
   "/ring",
-  roleMiddleware(["admin", "employee"]),
+  roleMiddleware(["ADMIN", "EMPLOYEE"]),
   employeePermission("BELL_RING"),
   sendBell
 );
 
-// current user: check if any active bell for me
+// =============================
+// DO NOT REQUIRE PERMISSION
+// =============================
+
 router.get(
   "/me/active",
-  roleMiddleware(["admin", "employee"]),
+  roleMiddleware(["ADMIN", "EMPLOYEE"]),
   getMyActiveBell
 );
 
-// stop bell (current user)
 router.post(
   "/stop/:bellId",
-  roleMiddleware(["admin", "employee"]),
+  roleMiddleware(["ADMIN", "EMPLOYEE"]),
   stopBell
 );
 
