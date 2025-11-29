@@ -1,5 +1,4 @@
 // C:\NexPulse\backend\src\routes\bellRoutes.js
-
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { roleMiddleware } from "../middleware/roleMiddleware.js";
@@ -14,40 +13,35 @@ import {
 
 const router = express.Router();
 
-// All bell routes need user logged in
 router.use(authMiddleware);
 
-// =============================
-// ONLY send & targets need permission
-// =============================
-
+// fetch list of employee targets
 router.get(
   "/targets",
-  roleMiddleware(["ADMIN", "EMPLOYEE"]),
+  roleMiddleware("ADMIN", "EMPLOYEE"),
   employeePermission("BELL_RING"),
   getBellTargets
 );
 
+// send bell
 router.post(
   "/ring",
-  roleMiddleware(["ADMIN", "EMPLOYEE"]),
+  roleMiddleware("ADMIN", "EMPLOYEE"),
   employeePermission("BELL_RING"),
   sendBell
 );
 
-// =============================
-// DO NOT REQUIRE PERMISSION
-// =============================
-
+// check active bell
 router.get(
   "/me/active",
-  roleMiddleware(["ADMIN", "EMPLOYEE"]),
+  roleMiddleware("ADMIN", "EMPLOYEE"),
   getMyActiveBell
 );
 
+// stop bell
 router.post(
   "/stop/:bellId",
-  roleMiddleware(["ADMIN", "EMPLOYEE"]),
+  roleMiddleware("ADMIN", "EMPLOYEE"),
   stopBell
 );
 
