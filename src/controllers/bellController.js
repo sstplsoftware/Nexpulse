@@ -4,93 +4,138 @@ import User from "../models/User.js";
 
 /**
  * GET /api/bell/targets
- * Return list of employees/admins who can receive bell
+ * Return ONLY employees based on role rules:
+ * - SUPER_ADMIN → all EMPLOYEES
+ * - ADMIN → only EMPLOYEES createdBy this admin
+ * - EMPLOYEE → all EMPLOYEES except himself
  */
 export const getBellTargets = async (req, res) => {
   try {
-    const currentUserId = req.user._id;
+    const user = req.user;
+    const userId = user._id.toString();
 
-    // You can adjust filter as per your project
-    const users = await User.find({
-      _id: { $ne: currentUserId },
-      isActive: true,
-    })
+    let filter = {
+      _id: { $ne: userId },
+      role: "EMPLOYEE",      // 🔥 ALWAYS employees only
+      isLocked: false
+    };
+
+    // ADMIN → only employees created by this admin
+    if (user.role === "ADMIN") {
+      filter.createdBy = userId;
+    }
+
+    // SUPER_ADMIN → all employees (no extra filter)
+
+    // EMPLOYEE → all employees except self
+
+    const employees = await User.find(filter)
       .select("_id email role profile.name")
       .lean();
 
-    const formatted = users.map((u) => ({
+    const formatted = employees.map((u) => ({
       _id: u._id,
       email: u.email,
-      role: u.role,
-      name: u?.profile?.name || "User",
+      role: "EMPLOYEE",
+      name: u?.profile?.name || u.email,
     }));
 
     res.json(formatted);
   } catch (err) {
-    console.error("getBellTargets error", err);
+    console.error("getBellTargets error:", err);
     res.status(500).json({ message: "Failed to load bell targets" });
   }
 };
 
+
+
 /**
  * POST /api/bell/ring
  * body: { toEmployeeId, message, ringAll }
+ * Super Admin → ring all employees
+ * Admin → ring only employees created by same admin
+ * Employee → ring only employees
  */
 export const sendBell = async (req, res) => {
   try {
-    const fromId = req.user._id;
+    const sender = req.user;
+    const fromId = sender._id.toString();
     const { toEmployeeId, message, ringAll } = req.body;
 
     if (!message || (!ringAll && !toEmployeeId)) {
-      return res
-        .status(400)
-        .json({ message: "Target and message are required" });
+      return res.status(400).json({ message: "Target and message required" });
     }
 
-    let targetUsers = [];
+    let targets = [];
 
     if (ringAll) {
-      // Ring all active employees / admins except sender
-      targetUsers = await User.find({
+      // SUPER_ADMIN → all employees
+      // ADMIN → only employees createdBy them
+      // EMPLOYEE → all employees except self
+
+      const filter = {
         _id: { $ne: fromId },
-        isActive: true,
+        role: "EMPLOYEE",
+        isLocked: false
+      };
+
+      if (sender.role === "ADMIN") {
+        filter.createdBy = fromId;
+      }
+
+      targets = await User.find(filter).select("_id").lean();
+    } else {
+      // single target
+      const target = await User.findOne({
+        _id: toEmployeeId,
+        role: "EMPLOYEE",
+        isLocked: false
       })
         .select("_id")
         .lean();
-    } else {
-      const target = await User.findById(toEmployeeId).select("_id").lean();
+
       if (!target) {
-        return res.status(404).json({ message: "Target user not found" });
+        return res.status(404).json({ message: "Target employee not found" });
       }
-      targetUsers = [target];
+
+      // ADMIN check → target must be same-admin employee
+      if (sender.role === "ADMIN" && target.createdBy?.toString() !== fromId) {
+        return res
+          .status(403)
+          .json({ message: "You cannot ring this employee" });
+      }
+
+      targets = [target];
     }
 
-    if (targetUsers.length === 0) {
-      return res.status(400).json({ message: "No target users found" });
+    if (!targets.length) {
+      return res.status(400).json({ message: "No valid employees found" });
     }
 
-    const docs = targetUsers.map((u) => ({
+    const docs = targets.map((t) => ({
       from: fromId,
-      to: u._id,
+      to: t._id,
       message,
       ringAll: !!ringAll,
     }));
 
-    const created = await Bell.insertMany(docs);
+    await Bell.insertMany(docs);
 
     res.status(201).json({
       message: "Bell sent successfully",
-      count: created.length,
+      count: docs.length,
     });
   } catch (err) {
-    console.error("sendBell error", err);
+    console.error("sendBell error:", err);
     res.status(500).json({ message: "Failed to send bell" });
   }
 };
 
+
+
 /**
  * GET /api/bell/me/active
- * Get latest active bell for logged-in user (if any)
+ * Get latest active bell for logged-in user
  */
 export const getMyActiveBell = async (req, res) => {
   try {
@@ -101,12 +146,10 @@ export const getMyActiveBell = async (req, res) => {
       isActive: true,
     })
       .sort({ createdAt: -1 })
-      .populate("from", "email role profile.name")
+      .populate("from", "email profile.name")
       .lean();
 
-    if (!bell) {
-      return res.json(null);
-    }
+    if (!bell) return res.json(null);
 
     res.json({
       bellId: bell._id,
@@ -120,6 +163,8 @@ export const getMyActiveBell = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch bell status" });
   }
 };
+
+
 
 /**
  * POST /api/bell/stop/:bellId
@@ -137,8 +182,7 @@ export const stopBell = async (req, res) => {
     });
 
     if (!bell) {
-      // nothing to stop, return OK
-      return res.json({ message: "Bell already stopped or not found" });
+      return res.json({ message: "Bell already stopped" });
     }
 
     bell.isActive = false;
