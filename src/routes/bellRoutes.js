@@ -2,7 +2,6 @@
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { roleMiddleware } from "../middleware/roleMiddleware.js";
-import { employeePermission } from "../middleware/permissionMiddleware.js";
 
 import {
   getBellTargets,
@@ -13,35 +12,41 @@ import {
 
 const router = express.Router();
 
+// All bell routes require login
 router.use(authMiddleware);
 
-// fetch list of employee targets
+// ======================================
+// 🔥 SUPER ADMIN → can ring all employees
+// 🔥 ADMIN → can ring employees created by HIM
+// 🔥 EMPLOYEE → ring other employees
+// No permissionMiddleware needed anymore
+// ======================================
+
+// Get employees
 router.get(
   "/targets",
-  roleMiddleware("ADMIN", "EMPLOYEE"),
-  employeePermission("BELL_RING"),
+  roleMiddleware("SUPER_ADMIN", "ADMIN", "EMPLOYEE"),
   getBellTargets
 );
 
-// send bell
+// Ring bell
 router.post(
   "/ring",
-  roleMiddleware("ADMIN", "EMPLOYEE"),
-  employeePermission("BELL_RING"),
+  roleMiddleware("SUPER_ADMIN", "ADMIN", "EMPLOYEE"),
   sendBell
 );
 
-// check active bell
+// Get active bell
 router.get(
   "/me/active",
-  roleMiddleware("ADMIN", "EMPLOYEE"),
+  roleMiddleware("SUPER_ADMIN", "ADMIN", "EMPLOYEE"),
   getMyActiveBell
 );
 
-// stop bell
+// Stop bell
 router.post(
   "/stop/:bellId",
-  roleMiddleware("ADMIN", "EMPLOYEE"),
+  roleMiddleware("SUPER_ADMIN", "ADMIN", "EMPLOYEE"),
   stopBell
 );
 
