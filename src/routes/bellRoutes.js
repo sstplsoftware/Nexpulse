@@ -1,5 +1,4 @@
 // C:\NexPulse\backend\src\routes\bellRoutes.js
-
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { roleMiddleware } from "../middleware/roleMiddleware.js";
@@ -14,42 +13,35 @@ import {
 
 const router = express.Router();
 
-// all bell routes require login
 router.use(authMiddleware);
 
-// ===============================
-// ONLY THESE REQUIRE PERMISSION
-// ===============================
-
+// dropdown list
 router.get(
   "/targets",
-  roleMiddleware(["ADMIN", "EMPLOYEE"]),
+  roleMiddleware("ADMIN", "EMPLOYEE"),
   employeePermission("BELL_RING"),
   getBellTargets
 );
 
+// send bell
 router.post(
   "/ring",
-  roleMiddleware(["ADMIN", "EMPLOYEE"]),
+  roleMiddleware("ADMIN", "EMPLOYEE"),
   employeePermission("BELL_RING"),
   sendBell
 );
 
-// ===============================
-// ❌ NO PERMISSION REQUIRED HERE
-// ===============================
-
-// anyone logged in can check bell status
+// optional HTTP fallback
 router.get(
   "/me/active",
-  roleMiddleware(["ADMIN", "EMPLOYEE"]),
+  roleMiddleware("ADMIN", "EMPLOYEE"),
   getMyActiveBell
 );
 
-// anyone logged in can stop ringing
+// stop bell
 router.post(
   "/stop/:bellId",
-  roleMiddleware(["ADMIN", "EMPLOYEE"]),
+  roleMiddleware("ADMIN", "EMPLOYEE"),
   stopBell
 );
 

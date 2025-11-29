@@ -1,97 +1,93 @@
 // C:\NexPulse\backend\src\controllers\bellController.js
 import Bell from "../models/Bell.js";
 import User from "../models/User.js";
+import { emitBellToUser, emitBellStoppedToUser } from "../socket/bellSocket.js";
 
-/**
- * GET /api/bell/targets
- * Return list of employees/admins who can receive bell
- */
+// 🎯 who can be called
 export const getBellTargets = async (req, res) => {
   try {
-    const currentUserId = req.user._id;
+    const userId = req.user._id;
 
-    // You can adjust filter as per your project
     const users = await User.find({
-      _id: { $ne: currentUserId },
-      isActive: true,
+      _id: { $ne: userId },
+      isLocked: false,
     })
-      .select("_id email role profile.name")
+      .select("_id profile.name email role")
       .lean();
 
-    const formatted = users.map((u) => ({
-      _id: u._id,
-      email: u.email,
-      role: u.role,
-      name: u?.profile?.name || "User",
-    }));
-
-    res.json(formatted);
+    res.json(users);
   } catch (err) {
-    console.error("getBellTargets error", err);
+    console.error("getBellTargets error:", err);
     res.status(500).json({ message: "Failed to load bell targets" });
   }
 };
 
-/**
- * POST /api/bell/ring
- * body: { toEmployeeId, message, ringAll }
- */
+// 🔔 send bell
 export const sendBell = async (req, res) => {
   try {
-    const fromId = req.user._id;
+    const from = req.user._id;
     const { toEmployeeId, message, ringAll } = req.body;
 
-    if (!message || (!ringAll && !toEmployeeId)) {
-      return res
-        .status(400)
-        .json({ message: "Target and message are required" });
+    if (!message) {
+      return res.status(400).json({ message: "Message required" });
     }
 
-    let targetUsers = [];
+    let targets = [];
 
     if (ringAll) {
-      // Ring all active employees / admins except sender
-      targetUsers = await User.find({
-        _id: { $ne: fromId },
-        isActive: true,
-      })
+      targets = await User.find({ isLocked: false, _id: { $ne: from } })
         .select("_id")
         .lean();
     } else {
-      const target = await User.findById(toEmployeeId).select("_id").lean();
+      if (!toEmployeeId) {
+        return res
+          .status(400)
+          .json({ message: "Target employee is required" });
+      }
+      const target = await User.findById(toEmployeeId)
+        .select("_id")
+        .lean();
       if (!target) {
         return res.status(404).json({ message: "Target user not found" });
       }
-      targetUsers = [target];
+      targets = [target];
     }
 
-    if (targetUsers.length === 0) {
-      return res.status(400).json({ message: "No target users found" });
+    if (!targets.length) {
+      return res.status(400).json({ message: "No valid targets" });
     }
 
-    const docs = targetUsers.map((u) => ({
-      from: fromId,
-      to: u._id,
+    const fromUser = await User.findById(from)
+      .select("profile.name email")
+      .lean();
+
+    const docs = targets.map((t) => ({
+      from,
+      to: t._id,
       message,
       ringAll: !!ringAll,
     }));
 
     const created = await Bell.insertMany(docs);
 
-    res.status(201).json({
-      message: "Bell sent successfully",
-      count: created.length,
+    // 🔥 Emit socket event for each target
+    created.forEach((doc) => {
+      emitBellToUser(doc.to, {
+        bellId: doc._id.toString(),
+        fromName: fromUser?.profile?.name || "Someone",
+        message: doc.message,
+        createdAt: doc.createdAt,
+      });
     });
+
+    res.json({ message: "Bell sent", count: created.length });
   } catch (err) {
-    console.error("sendBell error", err);
+    console.error("sendBell error:", err);
     res.status(500).json({ message: "Failed to send bell" });
   }
 };
 
-/**
- * GET /api/bell/me/active
- * Get latest active bell for logged-in user (if any)
- */
+// 👂 (fallback HTTP) – active bell (optional now, but keep for safety)
 export const getMyActiveBell = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -101,52 +97,45 @@ export const getMyActiveBell = async (req, res) => {
       isActive: true,
     })
       .sort({ createdAt: -1 })
-      .populate("from", "email role profile.name")
+      .populate("from", "profile.name email")
       .lean();
 
-    if (!bell) {
-      return res.json(null);
-    }
+    if (!bell) return res.json(null);
 
     res.json({
-      bellId: bell._id,
-      message: bell.message,
+      bellId: bell._id.toString(),
       fromName: bell.from?.profile?.name || "Someone",
-      fromEmail: bell.from?.email,
+      message: bell.message,
       createdAt: bell.createdAt,
     });
   } catch (err) {
-    console.error("getMyActiveBell error", err);
-    res.status(500).json({ message: "Failed to fetch bell status" });
+    console.error("getMyActiveBell error:", err);
+    res.status(500).json({ message: "Failed" });
   }
 };
 
-/**
- * POST /api/bell/stop/:bellId
- * Stop bell for current user
- */
+// 🛑 stop bell
 export const stopBell = async (req, res) => {
   try {
     const userId = req.user._id;
     const { bellId } = req.params;
 
-    const bell = await Bell.findOne({
-      _id: bellId,
-      to: userId,
-      isActive: true,
-    });
+    const bell = await Bell.findOneAndUpdate(
+      { _id: bellId, to: userId },
+      { isActive: false },
+      { new: true }
+    );
 
-    if (!bell) {
-      // nothing to stop, return OK
-      return res.json({ message: "Bell already stopped or not found" });
+    if (bell) {
+      emitBellStoppedToUser(bell.from, {
+        bellId: bell._id.toString(),
+        to: userId.toString(),
+      });
     }
-
-    bell.isActive = false;
-    await bell.save();
 
     res.json({ message: "Bell stopped" });
   } catch (err) {
-    console.error("stopBell error", err);
-    res.status(500).json({ message: "Failed to stop bell" });
+    console.error("stopBell error:", err);
+    res.status(500).json({ message: "Failed" });
   }
 };
