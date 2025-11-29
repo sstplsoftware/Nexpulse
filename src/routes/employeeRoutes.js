@@ -22,6 +22,7 @@ import {
   leaveApprovalHandler,
   chatWithEmployeeHandler,
   chatWithAdminHandler,
+  getVisibleEmployees,
 } from "../controllers/employeeController.js";
 
 import {
@@ -50,6 +51,17 @@ router.use(authMiddleware, roleMiddleware("EMPLOYEE"));
 // PROFILE
 // ==========================
 router.get("/profile", getMyProfile);
+
+// ==========================
+// EMPLOYEE INFO VIEW (list of employees)
+// needs EMPLOYE_INFO_VIEW permission
+// ==========================
+router.get(
+  "/employees",
+  employeePermission("EMPLOYE_INFO_VIEW"),
+  getVisibleEmployees
+);
+
 
 // ==========================
 // PERMISSION-BASED MODULE ROUTES

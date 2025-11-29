@@ -88,3 +88,36 @@ export async function chatWithEmployeeHandler(req, res) {
 export async function chatWithAdminHandler(req, res) {
   return res.json({ ok: true, message: "Chat with admin endpoint (to be implemented)" });
 }
+
+// Get list of employees current user is allowed to see
+export async function getVisibleEmployees(req, res) {
+  try {
+    // current logged-in user (EMPLOYEE)
+    const me = await User.findById(req.user._id).select("role createdBy");
+
+    if (!me) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Basic rule:
+    // - Employee sees other employees created by the same admin (createdBy)
+    const filter = {
+      role: "EMPLOYEE",
+      createdBy: me.createdBy, // same admin
+    };
+
+    const employees = await User.find(filter)
+      .select(
+        "profile email employeeId officialPhone personalPhone otherEmail"
+      )
+      .sort({ "profile.name": 1 });
+
+    return res.json({
+      ok: true,
+      employees,
+    });
+  } catch (err) {
+    console.error("getVisibleEmployees error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
