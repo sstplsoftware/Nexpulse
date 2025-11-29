@@ -1,10 +1,16 @@
 // C:\NexPulse\backend\src\socket\bellSocket.js
+
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
+// Active IO instance for emit helpers
+let ioInstance = null;
 
-export function initBellSocket(httpServer) {
+/**
+ * Initialize bell socket on startup
+ */
+export const initBellSocket = (httpServer) => {
   const io = new Server(httpServer, {
     cors: {
       origin: [
@@ -12,25 +18,27 @@ export function initBellSocket(httpServer) {
         "https://nexpulse.sstpltech.com",
         "http://nexpulse.sstpltech.com",
         "https://www.nexpulse.sstpltech.com",
-        "https://crm-fft1.onrender.com"  // allow same domain on Render
+        "https://crm-fft1.onrender.com",
+        "*"
       ],
       methods: ["GET", "POST"],
-      credentials: true,
+      credentials: true
     },
-    transports: ["websocket", "polling"],
+    transports: ["websocket", "polling"]
   });
 
+  ioInstance = io;
   console.log("🔌 Socket.IO Initialized for Bell System");
 
-  // ============================================
-  // 🔐 SOCKET AUTH MIDDLEWARE (JWT CHECK)
-  // ============================================
+  // =====================================================
+  // 🔐 JWT AUTH MIDDLEWARE
+  // =====================================================
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
 
       if (!token) {
-        console.log("❌ Socket rejected: No token");
+        console.log("❌ Socket rejected → No token");
         return next(new Error("NO_TOKEN"));
       }
 
@@ -38,7 +46,7 @@ export function initBellSocket(httpServer) {
       const user = await User.findById(decoded.userId);
 
       if (!user) {
-        console.log("❌ Socket rejected: Invalid user");
+        console.log("❌ Socket rejected → Invalid user");
         return next(new Error("INVALID_USER"));
       }
 
@@ -50,100 +58,40 @@ export function initBellSocket(httpServer) {
     }
   });
 
-  // ============================================
-  // 🔥 SOCKET CONNECTION
-  // ============================================
-  io.on("connection", async (socket) => {
+  // =====================================================
+  // 🔥 ON SOCKET CONNECTION
+  // =====================================================
+  io.on("connection", (socket) => {
     const userId = socket.user._id.toString();
-    const userEmail = socket.user.email;
 
-    console.log(`⚡ SOCKET CONNECTED → ${userEmail}`);
+    console.log(`⚡ SOCKET CONNECTED → ${socket.user.email}`);
 
-    // Join personal room (very important)
+    // User joins his private room
     socket.join(userId);
 
-    // ============================================
-    // 🔔 RECEIVE FROM BACKEND → SEND TO USER
-    // ============================================
+    // 🔔 SEND bell
     socket.on("bell:send", (payload) => {
-      // payload = { to, bellId, message, fromName }
-      console.log("🔔 Socket Bell Sending →", payload);
-
+      console.log("🔔 SOCKET SENDING BELL →", payload);
       io.to(payload.to).emit("bell:new", payload);
     });
 
-    // ============================================
-    // 🛑 STOP BELL (receiver)
-    // ============================================
+    // 🛑 STOP bell
     socket.on("bell:stop", (payload) => {
       io.to(payload.to).emit("bell:stopped", payload);
     });
 
-    // ============================================
-    // ❌ DISCONNECT
-    // ============================================
+    // ❌ Disconnect
     socket.on("disconnect", () => {
-      console.log(`❌ SOCKET DISCONNECTED → ${userEmail}`);
-    });
-  });
-}
-
-import "../loadEnv.js";
-
-let ioInstance = null;
-
-// userId -> Set<socketId>
-const userSockets = new Map();
-
-export const initBellSocket = (httpServer) => {
-  ioInstance = new Server(httpServer, {
-    cors: {
-      origin: "*", // you can restrict to your frontend URL
-      methods: ["GET", "POST"],
-    },
-  });
-
-  ioInstance.use(async (socket, next) => {
-    try {
-      const token = socket.handshake.auth?.token;
-      if (!token) return next(new Error("No token"));
-
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.userId).select("_id role");
-      if (!user) return next(new Error("User not found"));
-
-      socket.user = { id: user._id.toString(), role: user.role };
-      next();
-    } catch (err) {
-      console.error("Socket auth error:", err.message);
-      next(new Error("Unauthorized"));
-    }
-  });
-
-  ioInstance.on("connection", (socket) => {
-    const userId = socket.user.id;
-
-    if (!userSockets.has(userId)) {
-      userSockets.set(userId, new Set());
-    }
-    userSockets.get(userId).add(socket.id);
-
-    socket.join(userId); // room = userId
-
-    socket.on("disconnect", () => {
-      const set = userSockets.get(userId);
-      if (set) {
-        set.delete(socket.id);
-        if (set.size === 0) userSockets.delete(userId);
-      }
+      console.log(`❌ SOCKET DISCONNECTED → ${socket.user.email}`);
     });
   });
 
-  return ioInstance;
+  return io;
 };
 
-export const getIo = () => ioInstance;
-
+/**
+ * Emit helper for backend controllers
+ */
 export const emitBellToUser = (userId, payload) => {
   if (!ioInstance) return;
   ioInstance.to(userId.toString()).emit("bell:new", payload);
@@ -154,3 +102,4 @@ export const emitBellStoppedToUser = (userId, payload) => {
   ioInstance.to(userId.toString()).emit("bell:stopped", payload);
 };
 
+export const getIo = () => ioInstance;
