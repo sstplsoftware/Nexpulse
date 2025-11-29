@@ -30,11 +30,22 @@ const app = express();
 // CORS CONFIG (SAFE + PRODUCTION)
 // ------------------------------
 const allowedOrigins = [
-  "http://localhost:5173",           // local dev
-  "https://nexpulse.sstpltech.com",  // REPLACE THIS
-  "https://www.nexpulse.sstpltech.com/",
+  "http://localhost:5173",
+
+  // FRONTEND (cPanel domain)
+  "https://your-cpanel-domain.com",
+  "http://your-cpanel-domain.com",
+
+  // Backend Render domain (Socket fallback)
+  "https://crm-fft1.onrender.com",
+  "http://crm-fft1.onrender.com",
+
+  // Nexpulse domain
+  "https://nexpulse.sstpltech.com",
+  "https://www.nexpulse.sstpltech.com",
   "http://nexpulse.sstpltech.com"
 ];
+
 
 app.use(
   cors({
