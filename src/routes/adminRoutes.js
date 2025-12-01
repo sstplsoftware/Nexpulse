@@ -1,6 +1,8 @@
+// C:\NexPulse\backend\src\routes\adminRoutes.js
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { roleMiddleware } from "../middleware/roleMiddleware.js";
+
 import {
   getEmployees,
   createEmployee,
@@ -8,37 +10,42 @@ import {
   deleteEmployee,
   getSingleEmployee,
 } from "../controllers/adminController.js";
-import { getAllTasksForAdmin, deleteTaskByAdmin } from "../controllers/adminTaskController.js";
-import {
-  getTasksIAssigned
-} from "../controllers/assignedTaskController.js";
 
+import {
+  getAllTasksForAdmin,
+  deleteTaskByAdmin,
+} from "../controllers/adminTaskController.js";
+
+import {
+  getTasksIAssigned,
+  getMyAssignedTasks
+} from "../controllers/assignedTaskController.js";
 
 const router = express.Router();
 
-// Only ADMINs allowed
 router.use(authMiddleware, roleMiddleware("ADMIN"));
 
+// EMPLOYEE CRUD
 router.get("/employees", getEmployees);
 router.post("/employees", createEmployee);
 router.put("/employees/:id", updateEmployee);
 router.delete("/employees/:id", deleteEmployee);
-// 👇 ADD THIS NEW ROUTE
 router.get("/employees/:id", getSingleEmployee);
 
-router.get("/tasks/all", authMiddleware, roleMiddleware("ADMIN"), getAllTasksForAdmin);
+// Admin all task view
+router.get("/tasks/all", getAllTasksForAdmin);
 
-router.delete("/task/:taskId", authMiddleware, roleMiddleware("ADMIN"), deleteTaskByAdmin);
+// Admin delete a task
+router.delete("/task/:taskId", deleteTaskByAdmin);
 
 // ==========================
-// ADMIN: Outbox – tasks admin assigned
+// ADMIN TASK MODULE FIX
 // ==========================
-router.get(
-  "/assigned/outbox",
-  authMiddleware,
-  roleMiddleware("ADMIN"),
-  getTasksIAssigned
-);
 
+// ✔ Inbox (tasks assigned TO admin)
+router.get("/assigned/inbox", getMyAssignedTasks);
+
+// ✔ Outbox (tasks admin assigned to others)
+router.get("/assigned/outbox", getTasksIAssigned);
 
 export default router;
