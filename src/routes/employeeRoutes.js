@@ -213,10 +213,17 @@ router.get(
   getAssignableEmployees
 );
 
-// 2) Create / assign a task to another employee
 router.post(
   "/assigned/create",
-  employeePermission("TASK_ASSIGN"),
+  authMiddleware,
+  (req, res, next) => {
+    // ADMIN always allowed
+    if (req.user.role === "ADMIN") {
+      return next();
+    }
+    // EMPLOYEE permission system
+    return employeePermission("TASK_ASSIGN")(req, res, next);
+  },
   assignTaskToEmployee
 );
 
