@@ -158,14 +158,46 @@ export async function updateTaskHandler(req, res) {
 }
 
 // =============================
-// TASK VIEW (ALL EMPLOYEES, FOR TASK_VIEW ROLE)
+// TASK VIEW (ADMIN + EMPLOYEE ONLY)
 // =============================
 export async function getAllTasksForViewHandler(req, res) {
   try {
-    // You can later filter by company, date range, etc.
-    const tasks = await Task.find({})
+    const user = req.user;
+
+    let employeeFilter = {};
+
+    // -----------------------------
+    // ADMIN → sees only his employees
+    // -----------------------------
+    if (user.role === "ADMIN") {
+      employeeFilter = { createdBy: user._id };
+    }
+
+    // -----------------------------
+    // EMPLOYEE → sees tasks of employees
+    //           created by same admin
+    // -----------------------------
+    if (user.role === "EMPLOYEE") {
+      employeeFilter = { createdBy: user.createdBy };
+    }
+
+    // GET employees under this admin
+    const employees = await User.find({
+      role: "EMPLOYEE",
+      ...employeeFilter,
+    })
+      .select("_id")
+      .lean();
+
+    const employeeIds = employees.map((e) => e._id);
+
+    // GET ONLY THEIR TASKS
+    const tasks = await Task.find({
+      employeeId: { $in: employeeIds },
+    })
       .sort({ createdAt: -1 })
-      .limit(200);
+      .limit(200)
+      .lean();
 
     return res.json({ ok: true, tasks });
   } catch (err) {
@@ -173,6 +205,7 @@ export async function getAllTasksForViewHandler(req, res) {
     return res.status(500).json({ message: "Server error" });
   }
 }
+
 
 // =============================
 // DELETE TASK

@@ -9,8 +9,8 @@ import { emitBellToUser, emitBellStoppedToUser } from "../socket/bellSocket.js";
 | GET BELL TARGETS
 |--------------------------------------------------------------------------
 | SUPER_ADMIN → All employees  
-| ADMIN → Only employees created by him  
-| EMPLOYEE → All employees except himself  
+| ADMIN       → Only employees created by him  
+| EMPLOYEE    → Only employees created by HIS admin (same createdBy)
 */
 
 export const getBellTargets = async (req, res) => {
@@ -25,7 +25,13 @@ export const getBellTargets = async (req, res) => {
     };
 
     if (user.role === "ADMIN") {
+      // Admin sees HIS employees only
       filter.createdBy = userId;
+    }
+
+    if (user.role === "EMPLOYEE") {
+      // Employee sees employees created by the SAME ADMIN
+      filter.createdBy = user.createdBy.toString();
     }
 
     const employees = await User.find(filter)
@@ -46,13 +52,14 @@ export const getBellTargets = async (req, res) => {
   }
 };
 
+
 /*  
 |--------------------------------------------------------------------------
 | SEND BELL
 |--------------------------------------------------------------------------
 | SUPER_ADMIN → all employees  
-| ADMIN → employees created by him  
-| EMPLOYEE → employees except himself  
+| ADMIN       → employees created by him  
+| EMPLOYEE    → employees created by HIS admin  
 */
 
 export const sendBell = async (req, res) => {
@@ -67,7 +74,7 @@ export const sendBell = async (req, res) => {
 
     let targets = [];
 
-    // 🔔 Ring ALL employees
+    // RING ALL
     if (ringAll) {
       let filter = {
         _id: { $ne: fromId },
@@ -79,10 +86,14 @@ export const sendBell = async (req, res) => {
         filter.createdBy = fromId;
       }
 
+      if (sender.role === "EMPLOYEE") {
+        filter.createdBy = sender.createdBy.toString();
+      }
+
       targets = await User.find(filter).select("_id").lean();
     }
 
-    // 🔔 Single target
+    // RING ONE
     else {
       if (!toEmployeeId) {
         return res.status(400).json({ message: "Target employee required" });
@@ -100,14 +111,22 @@ export const sendBell = async (req, res) => {
         return res.status(404).json({ message: "Target employee not found" });
       }
 
-      // Admin cannot ring employees of other admins
+      // ADMIN SECURITY
       if (
         sender.role === "ADMIN" &&
         target.createdBy?.toString() !== fromId
       ) {
+        return res.status(403).json({ message: "You cannot ring this employee" });
+      }
+
+      // EMPLOYEE SECURITY
+      if (
+        sender.role === "EMPLOYEE" &&
+        target.createdBy?.toString() !== sender.createdBy.toString()
+      ) {
         return res
           .status(403)
-          .json({ message: "You cannot ring this employee" });
+          .json({ message: "You cannot ring an employee from another admin" });
       }
 
       targets = [target];
@@ -121,7 +140,6 @@ export const sendBell = async (req, res) => {
       .select("profile.name email")
       .lean();
 
-    // Save bells to DB
     const docs = targets.map((t) => ({
       from: fromId,
       to: t._id,
@@ -132,7 +150,6 @@ export const sendBell = async (req, res) => {
 
     const created = await Bell.insertMany(docs);
 
-    // Emit socket event for each employee
     created.forEach((doc) => {
       emitBellToUser(doc.to, {
         bellId: doc._id.toString(),
@@ -152,12 +169,12 @@ export const sendBell = async (req, res) => {
   }
 };
 
+
 /*  
 |--------------------------------------------------------------------------
-| GET ACTIVE BELL FOR USER
+| GET ACTIVE BELL
 |--------------------------------------------------------------------------
 */
-
 export const getMyActiveBell = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -184,12 +201,12 @@ export const getMyActiveBell = async (req, res) => {
   }
 };
 
+
 /*  
 |--------------------------------------------------------------------------
 | STOP BELL
 |--------------------------------------------------------------------------
 */
-
 export const stopBell = async (req, res) => {
   try {
     const userId = req.user._id;
