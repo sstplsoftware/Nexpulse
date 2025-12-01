@@ -18,7 +18,8 @@ import {
 
 import {
   getTasksIAssigned,
-  getMyAssignedTasks
+  getMyAssignedTasks,
+  assignTaskToEmployee,
 } from "../controllers/assignedTaskController.js";
 
 const router = express.Router();
@@ -47,5 +48,7 @@ router.get("/assigned/inbox", getMyAssignedTasks);
 
 // ✔ Outbox (tasks admin assigned to others)
 router.get("/assigned/outbox", getTasksIAssigned);
+
+router.post("/task/assign",authMiddleware,roleMiddleware("ADMIN"),assignTaskToEmployee);
 
 export default router;
