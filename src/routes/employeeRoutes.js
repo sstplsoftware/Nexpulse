@@ -42,6 +42,21 @@ import {
   respondToAssignedTask,
 } from "../controllers/assignedTaskController.js";
 
+import {
+  uploadHrmDocument,
+  getMyHrmDocuments,
+  sendHrmChatMessage,
+  getHrmChatHistory,
+} from "../controllers/hrmController.js";
+import { getUnreadHrmCount, markHrmChatRead } from "../controllers/hrmController.js";
+
+import { hrmUpload } from "../middleware/uploadMiddleware.js";
+import {
+  uploadHrmDocument,
+  getMyHrmDocuments,
+  // ...
+} from "../controllers/hrmController.js";
+
 const router = express.Router();
 
 // ✅ All employee routes require valid token + EMPLOYEE role
@@ -51,6 +66,24 @@ router.use(authMiddleware, roleMiddleware("EMPLOYEE"));
 // PROFILE
 // ==========================
 router.get("/profile", getMyProfile);
+
+router.post(
+  "/hrm/document/upload",
+  employeePermission("UPLOAD_DOCUMENTS"),
+  hrmUpload.single("file"),       // 🔥 multer
+  uploadHrmDocument
+);
+
+router.get("/hrm/chat/unread", employeePermission("CHAT_EMPLOYEE"), getUnreadHrmCount);
+router.post("/hrm/chat/mark-read", employeePermission("CHAT_EMPLOYEE"), markHrmChatRead);
+
+
+router.post("/hrm/document/upload", employeePermission("UPLOAD_DOCUMENTS"), uploadHrmDocument);
+router.get("/hrm/document/my", employeePermission("UPLOAD_DOCUMENTS"), getMyHrmDocuments);
+
+// Chat
+router.post("/hrm/chat/send", employeePermission("CHAT_EMPLOYEE"), sendHrmChatMessage);
+router.get("/hrm/chat/history", employeePermission("CHAT_EMPLOYEE"), getHrmChatHistory);
 
 // ==========================
 // EMPLOYEE INFO VIEW (list of employees)

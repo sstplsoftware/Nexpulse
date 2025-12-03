@@ -11,6 +11,14 @@ import {
   getSingleEmployee,
 } from "../controllers/adminController.js";
 
+import {
+  getHrmDocumentsForAdmin,
+  sendHrmChatMessage,
+  getHrmChatHistory,
+  getUnreadHrmCount,
+  markHrmChatRead,
+} from "../controllers/hrmController.js";
+
 // ✅ REPLACE OLD WRONG CONTROLLERS WITH FIXED ONES
 import {
   getAllTasksForViewHandler,
@@ -36,6 +44,13 @@ router.put("/employees/:id", updateEmployee);
 router.delete("/employees/:id", deleteEmployee);
 router.get("/employees/:id", getSingleEmployee);
 
+// View all employee docs (UNDER THIS ADMIN ONLY)
+router.get("/hrm/documents", getHrmDocumentsForAdmin);
+
+// Admin chat with employee
+router.post("/hrm/chat/send", sendHrmChatMessage);
+router.get("/hrm/chat/history", getHrmChatHistory);
+
 // ======================================================
 // ADMIN TASK VIEW  (🔥 FIXED)
 // ======================================================
@@ -45,6 +60,11 @@ router.get("/tasks/all", getAllTasksForViewHandler);
 
 // ✔ Admin deletes a task
 router.delete("/task/:taskId", deleteTaskHandler);
+
+
+router.get("/hrm/chat/unread", getUnreadHrmCount);
+router.post("/hrm/chat/mark-read", markHrmChatRead);
+
 
 // ======================================================
 // ADMIN ASSIGNED TASK SYSTEM
