@@ -24,6 +24,11 @@ import {
   getAllTasksForViewHandler,
   deleteTaskHandler,
 } from "../controllers/taskController.js";
+import {
+  adminGetHrmInbox,
+  adminGetChatWithEmployee,
+  adminSendHrmMessage,
+} from "../controllers/hrmChatController.js";
 
 import {
   getTasksIAssigned,
@@ -69,6 +74,20 @@ router.post("/hrm/chat/mark-read", markHrmChatRead);
 // ======================================================
 // ADMIN ASSIGNED TASK SYSTEM
 // ======================================================
+
+// ==========================
+// HRM CHAT – ADMIN SIDE
+// ==========================
+
+// 🔹 Inbox list: employees who chatted + unread counts
+router.get("/hrm/chat/inbox", adminGetHrmInbox);
+
+// 🔹 History with one employee
+router.get("/hrm/chat/history/:employeeId", adminGetChatWithEmployee);
+
+// 🔹 Send reply to employee
+router.post("/hrm/chat/send", adminSendHrmMessage);
+
 
 // ✔ Tasks assigned TO admin (Inbox)
 router.get("/assigned/inbox", getMyAssignedTasks);

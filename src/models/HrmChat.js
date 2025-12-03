@@ -1,18 +1,51 @@
-// HrmChat.js
+// C:\NexPulse\backend\src\models\HrmChat.js
+
 import mongoose from "mongoose";
 
-const HrmChatSchema = new mongoose.Schema(
+const { Schema } = mongoose;
+
+const hrmChatSchema = new Schema(
   {
-    senderId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    receiverId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    adminId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    employeeId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
 
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, // admin id
+    senderId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    receiverId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
 
-    message: { type: String, required: true },
+    message: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
-    isRead: { type: Boolean, default: false },
+    isReadByAdmin: {
+      type: Boolean,
+      default: false,
+    },
+    isReadByEmployee: {
+      type: Boolean,
+      default: false,
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-export default mongoose.model("HrmChat", HrmChatSchema);
+export default mongoose.model("HrmChat", hrmChatSchema);
