@@ -73,8 +73,6 @@ router.post(
 router.get("/hrm/chat/unread", employeePermission("CHAT_EMPLOYEE"), getUnreadHrmCount);
 router.post("/hrm/chat/mark-read", employeePermission("CHAT_EMPLOYEE"), markHrmChatRead);
 
-
-router.post("/hrm/document/upload", employeePermission("UPLOAD_DOCUMENTS"), uploadHrmDocument);
 router.get("/hrm/document/my", employeePermission("UPLOAD_DOCUMENTS"), getMyHrmDocuments);
 
 // Chat
@@ -162,11 +160,6 @@ router.post(
   bellRingHandler
 );
 
-router.post(
-  "/documents/upload",
-  employeePermission("UPLOAD_DOCUMENTS"),
-  uploadDocumentsHandler
-);
 
 router.post(
   "/leave/request",
