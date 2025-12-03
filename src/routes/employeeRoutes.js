@@ -269,7 +269,7 @@ router.patch(
   respondToAssignedTask
 );
 
-router.get(
+uter.get(
   "/chat/employees",
   employeePermission("CHAT_EMPLOYEE"),
   async (req, res) => {
@@ -277,9 +277,9 @@ router.get(
       const user = req.user;
 
       const employees = await User.find({
-        createdBy: user.createdBy,
+        createdBy: user.createdBy,  // same company
         role: "EMPLOYEE",
-        _id: { $ne: user._id }
+        _id: { $ne: user._id }       // exclude myself
       }).select("_id email profile.name");
 
       return res.json({ employees });
@@ -289,6 +289,5 @@ router.get(
     }
   }
 );
-
 
 export default router;
