@@ -14,7 +14,6 @@ dotenv.config({ path: path.join(__dirname, "../.env") });
 import express from "express";
 import cors from "cors";
 import http from "http"; // Needed for socket.io
-import fileUpload from "express-fileupload";
 
 // DB
 import { connectDB } from "./config/db.js";
@@ -56,7 +55,7 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin) return callback(null, true); // mobile apps / postman
+      if (!origin) return callback(null, true); // Postman / server-to-server
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
@@ -69,15 +68,9 @@ app.use(
 );
 
 // =======================================
-// Middleware
+// Body parser
 // =======================================
 app.use(express.json());
-app.use(
-  fileUpload({
-    useTempFiles: true,
-    tempFileDir: "/tmp/",
-  })
-);
 
 // =======================================
 // Routes
@@ -96,7 +89,7 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true, status: "running", version: "1.0.0" });
 });
 
-// Root (fallback)
+// Root
 app.get("/", (req, res) => {
   res.json({
     status: "running",
