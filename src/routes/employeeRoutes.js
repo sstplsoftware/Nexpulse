@@ -43,33 +43,31 @@ import {
   respondToAssignedTask,
 } from "../controllers/assignedTaskController.js";
 
-// HRM Controller
 import {
   uploadHrmDocument,
   getMyHrmDocuments,
   sendHrmChatMessage,
   getHrmChatHistory,
   getUnreadHrmCount,
-  markHrmChatRead,
+  markHrmChatRead
 } from "../controllers/hrmController.js";
 
 import { hrmUpload } from "../middleware/uploadMiddleware.js";
 
 const router = express.Router();
 
-// =======================================
-// GLOBAL GUARD → Must be logged-in Employee
-// =======================================
-router.use(authMiddleware, roleMiddleware("EMPLOYEE"));
+// 🔥 APPLY ONLY AUTH — no role lock here
+router.use(authMiddleware);
 
-// =======================================
+// ====================================================================
+// EMPLOYEE-ONLY ROUTES
+// ====================================================================
+router.use(roleMiddleware("EMPLOYEE"));
+
 // PROFILE
-// =======================================
 router.get("/profile", getMyProfile);
 
-// =======================================
-// HRM DOCUMENT UPLOAD
-// =======================================
+// HRM Documents
 router.post(
   "/hrm/document/upload",
   employeePermission("UPLOAD_DOCUMENTS"),
@@ -77,217 +75,69 @@ router.post(
   uploadHrmDocument
 );
 
-router.get(
-  "/hrm/document/my",
+router.get("/hrm/document/my",
   employeePermission("UPLOAD_DOCUMENTS"),
   getMyHrmDocuments
 );
 
-// =======================================
-// HRM CHAT SYSTEM
-// =======================================
-router.get(
-  "/hrm/chat/unread",
-  employeePermission("CHAT_EMPLOYEE"),
-  getUnreadHrmCount
-);
+// ====================================================================
+// HRM CHAT ROUTES (ADMIN + EMPLOYEE BOTH)
+// ====================================================================
 
-router.post(
-  "/hrm/chat/mark-read",
-  employeePermission("CHAT_EMPLOYEE"),
-  markHrmChatRead
-);
-
+// Send chat
 router.post(
   "/hrm/chat/send",
-  employeePermission("CHAT_EMPLOYEE"),
+  (req, res, next) => {
+    if (req.user.role === "ADMIN") return next(); 
+    return employeePermission("CHAT_EMPLOYEE")(req, res, next);
+  },
   sendHrmChatMessage
 );
 
+// Chat history
 router.get(
   "/hrm/chat/history",
-  employeePermission("CHAT_EMPLOYEE"),
+  (req, res, next) => {
+    if (req.user.role === "ADMIN") return next();
+    return employeePermission("CHAT_EMPLOYEE")(req, res, next);
+  },
   getHrmChatHistory
 );
 
-// =======================================
-// EMPLOYEE INFO VIEW
-// =======================================
+// Unread count
 router.get(
-  "/employees",
-  employeePermission("EMPLOYE_INFO_VIEW"),
-  getVisibleEmployees
+  "/hrm/chat/unread",
+  (req, res, next) => {
+    if (req.user.role === "ADMIN") return next();
+    return employeePermission("CHAT_EMPLOYEE")(req, res, next);
+  },
+  getUnreadHrmCount
 );
 
-// =======================================
-// PERMISSION BASED ROUTES
-// =======================================
+// Mark read
 router.post(
-  "/task-update",
-  employeePermission("TASK_UPDATE"),
-  taskUpdateHandler
+  "/hrm/chat/mark-read",
+  (req, res, next) => {
+    if (req.user.role === "ADMIN") return next();
+    return employeePermission("CHAT_EMPLOYEE")(req, res, next);
+  },
+  markHrmChatRead
 );
 
-router.post("/mis-manage", employeePermission("MIS_MANAGE"), misManageHandler);
-
-router.get(
-  "/tasks/view",
-  employeePermission("TASK_VIEW"),
-  getAllTasksForViewHandler
-);
-
-router.post(
-  "/attendance/mark",
-  employeePermission("ATTENDANCE_MARK"),
-  attendanceMarkHandler
-);
-
-router.post(
-  "/attendance/manage",
-  employeePermission("ATTENDANCE_MANAGE"),
-  attendanceManageHandler
-);
-
-router.get(
-  "/attendance/view",
-  employeePermission("ATTENDANCE_VIEW"),
-  attendanceViewHandler
-);
-
-router.get(
-  "/salary/view",
-  employeePermission("SALARY_VIEW"),
-  salaryViewHandler
-);
-
-router.post(
-  "/salary/manage",
-  employeePermission("SALARY_MANAGE"),
-  salaryManageHandler
-);
-
-router.post(
-  "/salary/generate-slip",
-  employeePermission("GEN_SALARY_SLIP"),
-  generateSalarySlipHandler
-);
-
-router.post(
-  "/holidays/mark",
-  employeePermission("HOLIDAYS_MARK"),
-  holidaysMarkHandler
-);
-
-router.post(
-  "/bell-ring",
-  employeePermission("BELL_RING"),
-  bellRingHandler
-);
-
-router.post(
-  "/leave/request",
-  employeePermission("LEAVE_REQUEST"),
-  leaveRequestHandler
-);
-
-router.post(
-  "/leave/approval",
-  employeePermission("LEAVE_APPROVAL"),
-  leaveApprovalHandler
-);
-
-router.post(
-  "/chat/employee",
-  employeePermission("CHAT_EMPLOYEE"),
-  chatWithEmployeeHandler
-);
-
-router.post(
-  "/chat/admin",
-  employeePermission("CHAT_ADMIN"),
-  chatWithAdminHandler
-);
-
-// =======================================
-// DAILY TASK UPDATE SYSTEM
-// =======================================
-router.post(
-  "/task-update/save",
-  employeePermission("TASK_UPDATE"),
-  saveTaskUpdateHandler
-);
-
-router.post(
-  "/task-update/final",
-  employeePermission("TASK_UPDATE"),
-  submitFinalTaskHandler
-);
-
-router.get(
-  "/task-update/history",
-  employeePermission("TASK_UPDATE"),
-  getLastTenTasksHandler
-);
-
-router.patch(
-  "/task-update/:taskId",
-  employeePermission("TASK_UPDATE"),
-  updateTaskHandler
-);
-
-router.delete(
-  "/task/:taskId",
-  employeePermission("TASK_VIEW"),
-  deleteTaskHandler
-);
-
-// =======================================
-// ASSIGNED TASK SYSTEM
-// =======================================
-router.get(
-  "/assignable/employees",
-  employeePermission("TASK_ASSIGN"),
-  getAssignableEmployees
-);
-
-router.post(
-  "/assigned/create",
-  employeePermission("TASK_ASSIGN"),
-  assignTaskToEmployee
-);
-
-router.get(
-  "/assigned/outbox",
-  employeePermission("TASK_ASSIGN"),
-  getTasksIAssigned
-);
-
-router.get(
-  "/assigned/inbox",
-  employeePermission("TASK_INBOX"),
-  getMyAssignedTasks
-);
-
-router.patch(
-  "/assigned/:taskId/respond",
-  employeePermission("TASK_INBOX"),
-  respondToAssignedTask
-);
-
-// =======================================
-// EMPLOYEE CHAT → DROPDOWN LIST
-// =======================================
+// Employee List for Chat
 router.get(
   "/chat/employees",
-  employeePermission("CHAT_EMPLOYEE"),
+  (req, res, next) => {
+    if (req.user.role === "ADMIN") return next();
+    return employeePermission("CHAT_EMPLOYEE")(req, res, next);
+  },
   async (req, res) => {
     try {
       const user = req.user;
-
       const employees = await User.find({
         createdBy: user.createdBy,
         role: "EMPLOYEE",
-        _id: { $ne: user._id },
+        _id: { $ne: user._id }
       }).select("_id email profile.name");
 
       return res.json({ employees });
@@ -296,6 +146,130 @@ router.get(
       return res.status(500).json({ message: "Server error" });
     }
   }
+);
+
+// ====================================================================
+// OLD EMPLOYEE MODULE ROUTES
+// ====================================================================
+
+router.post("/task-update",
+  employeePermission("TASK_UPDATE"),
+  taskUpdateHandler
+);
+
+router.post("/mis-manage",
+  employeePermission("MIS_MANAGE"),
+  misManageHandler
+);
+
+router.get("/tasks/view",
+  employeePermission("TASK_VIEW"),
+  getAllTasksForViewHandler
+);
+
+router.post("/attendance/mark",
+  employeePermission("ATTENDANCE_MARK"),
+  attendanceMarkHandler
+);
+
+router.post("/attendance/manage",
+  employeePermission("ATTENDANCE_MANAGE"),
+  attendanceManageHandler
+);
+
+router.get("/attendance/view",
+  employeePermission("ATTENDANCE_VIEW"),
+  attendanceViewHandler
+);
+
+router.get("/salary/view",
+  employeePermission("SALARY_VIEW"),
+  salaryViewHandler
+);
+
+router.post("/salary/manage",
+  employeePermission("SALARY_MANAGE"),
+  salaryManageHandler
+);
+
+router.post("/salary/generate-slip",
+  employeePermission("GEN_SALARY_SLIP"),
+  generateSalarySlipHandler
+);
+
+router.post("/holidays/mark",
+  employeePermission("HOLIDAYS_MARK"),
+  holidaysMarkHandler
+);
+
+router.post("/bell-ring",
+  employeePermission("BELL_RING"),
+  bellRingHandler
+);
+
+router.post("/leave/request",
+  employeePermission("LEAVE_REQUEST"),
+  leaveRequestHandler
+);
+
+router.post("/leave/approval",
+  employeePermission("LEAVE_APPROVAL"),
+  leaveApprovalHandler
+);
+
+// DAILY TASK CRUD
+router.post("/task-update/save",
+  employeePermission("TASK_UPDATE"),
+  saveTaskUpdateHandler
+);
+
+router.post("/task-update/final",
+  employeePermission("TASK_UPDATE"),
+  submitFinalTaskHandler
+);
+
+router.get("/task-update/history",
+  employeePermission("TASK_UPDATE"),
+  getLastTenTasksHandler
+);
+
+router.patch("/task-update/:taskId",
+  employeePermission("TASK_UPDATE"),
+  updateTaskHandler
+);
+
+router.delete("/task/:taskId",
+  employeePermission("TASK_VIEW"),
+  deleteTaskHandler
+);
+
+// ASSIGNED TASK SYSTEM
+router.get("/assignable/employees",
+  employeePermission("TASK_ASSIGN"),
+  getAssignableEmployees
+);
+
+router.post("/assigned/create",
+  (req, res, next) => {
+    if (req.user.role === "ADMIN") return next();
+    return employeePermission("TASK_ASSIGN")(req, res, next);
+  },
+  assignTaskToEmployee
+);
+
+router.get("/assigned/outbox",
+  employeePermission("TASK_ASSIGN"),
+  getTasksIAssigned
+);
+
+router.get("/assigned/inbox",
+  employeePermission("TASK_INBOX"),
+  getMyAssignedTasks
+);
+
+router.patch("/assigned/:taskId/respond",
+  employeePermission("TASK_INBOX"),
+  respondToAssignedTask
 );
 
 export default router;
