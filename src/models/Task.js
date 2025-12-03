@@ -10,8 +10,14 @@ const TaskSchema = new mongoose.Schema(
       required: true,
     },
 
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId, // ADMIN who owns this employee
+      ref: "User",
+      required: true,
+    },
+
     employeeCustomId: {
-      type: String,   // EM001150
+      type: String,
       required: false,
     },
 
@@ -31,7 +37,6 @@ const TaskSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-
 
 const Task = mongoose.model("Task", TaskSchema);
 

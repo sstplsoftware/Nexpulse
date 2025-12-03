@@ -20,12 +20,13 @@ export async function saveTaskUpdateHandler(req, res) {
       createdAt: { $gte: todayStart },
     });
 
-    // Create new task if not exists
+    // Create new task
     if (!task) {
       task = new Task({
         employeeId: user._id,
+        createdBy: user.createdBy,              // 🔥 FIX: link task to admin
         employeeName: user.profile.name,
-        employeeCustomId: user.employeeId,  // ← THIS IS EM00XXXX
+        employeeCustomId: user.employeeId,
         morningTask,
         eveningUpdate,
         isFinal: false,
@@ -33,7 +34,7 @@ export async function saveTaskUpdateHandler(req, res) {
         finalSubmittedAt: null,
       });
     } else {
-      // Prevent editing if final (normal save)
+      // Prevent editing if final
       if (task.isFinal) {
         return res
           .status(400)
@@ -72,7 +73,7 @@ export async function submitFinalTaskHandler(req, res) {
 
     task.isFinal = true;
     task.finalSubmittedAt = new Date();
-    task.editCount = 0; // reset edit count at final submit
+    task.editCount = 0;
     await task.save();
 
     return res.json({ ok: true, message: "Task Final Submitted" });
@@ -117,14 +118,14 @@ export async function updateTaskHandler(req, res) {
     if (task.employeeId.toString() !== req.user._id.toString())
       return res.status(403).json({ message: "Not allowed" });
 
-    // Check edit limit (max 2 edits)
+    // Check edit limit
     if (task.editCount >= 2) {
       return res
         .status(400)
         .json({ message: "You have reached your 2 edits limit for this task" });
     }
 
-    // Check time window (6 hours after final submit)
+    // Check final submit restriction
     if (task.finalSubmittedAt) {
       const hoursPassed =
         (Date.now() - new Date(task.finalSubmittedAt).getTime()) /
@@ -137,11 +138,9 @@ export async function updateTaskHandler(req, res) {
       }
     }
 
-    // UPDATE TASK
     task.morningTask = morningTask;
     task.eveningUpdate = eveningUpdate;
-
-    task.isFinal = false; // unlock
+    task.isFinal = false;
     task.editCount = (task.editCount || 0) + 1;
 
     await task.save();
@@ -164,37 +163,24 @@ export async function getAllTasksForViewHandler(req, res) {
   try {
     const user = req.user;
 
-    let employeeFilter = {};
+    let filter = {};
 
     // -----------------------------
-    // ADMIN → sees only his employees
+    // ADMIN → sees tasks ONLY from his employees
     // -----------------------------
     if (user.role === "ADMIN") {
-      employeeFilter = { createdBy: user._id };
+      filter = { createdBy: user._id };          // 🔥 FIX
     }
 
     // -----------------------------
-    // EMPLOYEE → sees tasks of employees
-    //           created by same admin
+    // EMPLOYEE → sees tasks of employees under same admin
     // -----------------------------
     if (user.role === "EMPLOYEE") {
-      employeeFilter = { createdBy: user.createdBy };
+      filter = { createdBy: user.createdBy };    // 🔥 FIX
     }
 
-    // GET employees under this admin
-    const employees = await User.find({
-      role: "EMPLOYEE",
-      ...employeeFilter,
-    })
-      .select("_id")
-      .lean();
-
-    const employeeIds = employees.map((e) => e._id);
-
-    // GET ONLY THEIR TASKS
-    const tasks = await Task.find({
-      employeeId: { $in: employeeIds },
-    })
+    // GET tasks of that admin group
+    const tasks = await Task.find(filter)
       .sort({ createdAt: -1 })
       .limit(200)
       .lean();
@@ -205,7 +191,6 @@ export async function getAllTasksForViewHandler(req, res) {
     return res.status(500).json({ message: "Server error" });
   }
 }
-
 
 // =============================
 // DELETE TASK
