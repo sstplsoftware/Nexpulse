@@ -4,21 +4,19 @@ import "./loadEnv.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import { initHrmSocket } from "./socket/hrmSocket.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load .env
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
 import express from "express";
 import cors from "cors";
-import http from "http"; // Needed for socket.io
+import http from "http";
 
-// DB
 import { connectDB } from "./config/db.js";
 
-// Routes
 import authRoutes from "./routes/authRoutes.js";
 import superadminRoutes from "./routes/superadminRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
@@ -26,27 +24,22 @@ import adminEmployeeRoutes from "./routes/adminEmployeeRoutes.js";
 import employeeRoutes from "./routes/employeeRoutes.js";
 import bellRoutes from "./routes/bellRoutes.js";
 
-// Socket (Bell)
 import { initBellSocket } from "./socket/bellSocket.js";
 
 const app = express();
 const httpServer = http.createServer(app);
 
-// =======================================
-//    CORS CONFIG (Production Safe)
-// =======================================
+// 🟡 DO NOT initialize sockets here
+// initHrmSocket(httpServer) ❌ wrong
+// initBellSocket(httpServer) ❌ wrong
+
+// =========================
+// CORS
+// =========================
 const allowedOrigins = [
   "http://localhost:5173",
-
-  // cPanel frontend (replace when deployed)
-  "https://your-cpanel-domain.com",
-  "http://your-cpanel-domain.com",
-
-  // Render backend
   "https://crm-fft1.onrender.com",
   "http://crm-fft1.onrender.com",
-
-  // Nexpulse
   "https://nexpulse.sstpltech.com",
   "https://www.nexpulse.sstpltech.com",
   "http://nexpulse.sstpltech.com",
@@ -54,34 +47,25 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true); // Postman / server-to-server
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        console.log("❌ Blocked by CORS:", origin);
-        callback(new Error("CORS Not Allowed"));
-      }
+    origin: function (origin, cb) {
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      console.log("❌ Blocked by CORS:", origin);
+      return cb(new Error("CORS Not Allowed"));
     },
     credentials: true,
   })
 );
 
-// =======================================
-// Body parser
-// =======================================
+// Body Parser
 app.use(express.json());
 
-// =======================================
 // Routes
-// =======================================
 app.use("/api/auth", authRoutes);
 app.use("/api/superadmin", superadminRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminEmployeeRoutes);
 app.use("/api/employee", employeeRoutes);
-
-// Bell Routes
 app.use("/api/bell", bellRoutes);
 
 // Health Check
@@ -89,26 +73,25 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true, status: "running", version: "1.0.0" });
 });
 
-// Root
 app.get("/", (req, res) => {
   res.json({
     status: "running",
     message: "NexPulse CRM Backend is Live 🚀",
-    docs: "/api/health",
   });
 });
 
-// =======================================
-// Start Server + Socket.IO
-// =======================================
+// =========================
+// START SERVER + SOCKETS
+// =========================
 const PORT = process.env.PORT || 5000;
 
 async function start() {
   await connectDB();
   console.log("📌 MongoDB Connected");
 
-  // Initialize socket.io for Bell
+  // 🔥 Sockets must be initialized AFTER DB
   initBellSocket(httpServer);
+  initHrmSocket(httpServer);
 
   httpServer.listen(PORT, () => {
     console.log(`🚀 Server + Socket running on port ${PORT}`);
