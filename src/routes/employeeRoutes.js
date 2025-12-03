@@ -4,6 +4,8 @@ import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { roleMiddleware } from "../middleware/roleMiddleware.js";
 import { employeePermission } from "../middleware/permissionMiddleware.js";
+import User from "../models/User.js";
+
 
 import {
   getMyProfile,
@@ -184,6 +186,16 @@ router.post(
   chatWithAdminHandler
 );
 
+router.post(
+  "/hrm/chat/send",
+  (req, res, next) => {
+    if (req.user.role === "ADMIN") return next();  // allow admin
+    return employeePermission("CHAT_EMPLOYEE")(req, res, next);
+  },
+  sendHrmChatMessage
+);
+
+
 // ==========================
 // DAILY TASK UPDATE (SELF CRUD)
 // ==========================
@@ -269,7 +281,10 @@ router.patch(
   respondToAssignedTask
 );
 
-uter.get(
+// ==========================
+// EMPLOYEE CHAT - EMPLOYEE DROPDOWN LIST
+// ==========================
+router.get(
   "/chat/employees",
   employeePermission("CHAT_EMPLOYEE"),
   async (req, res) => {
@@ -277,9 +292,9 @@ uter.get(
       const user = req.user;
 
       const employees = await User.find({
-        createdBy: user.createdBy,  // same company
+        createdBy: user.createdBy,
         role: "EMPLOYEE",
-        _id: { $ne: user._id }       // exclude myself
+        _id: { $ne: user._id }
       }).select("_id email profile.name");
 
       return res.json({ employees });
@@ -289,5 +304,6 @@ uter.get(
     }
   }
 );
+
 
 export default router;
