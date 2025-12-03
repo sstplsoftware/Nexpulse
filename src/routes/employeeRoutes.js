@@ -51,11 +51,7 @@ import {
 import { getUnreadHrmCount, markHrmChatRead } from "../controllers/hrmController.js";
 
 import { hrmUpload } from "../middleware/uploadMiddleware.js";
-import {
-  uploadHrmDocument,
-  getMyHrmDocuments,
-  // ...
-} from "../controllers/hrmController.js";
+
 
 const router = express.Router();
 
