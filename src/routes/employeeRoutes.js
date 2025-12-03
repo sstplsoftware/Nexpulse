@@ -6,7 +6,6 @@ import { roleMiddleware } from "../middleware/roleMiddleware.js";
 import { employeePermission } from "../middleware/permissionMiddleware.js";
 import User from "../models/User.js";
 
-
 import {
   getMyProfile,
   taskUpdateHandler,
@@ -44,69 +43,93 @@ import {
   respondToAssignedTask,
 } from "../controllers/assignedTaskController.js";
 
+// HRM Controller
 import {
   uploadHrmDocument,
   getMyHrmDocuments,
   sendHrmChatMessage,
   getHrmChatHistory,
+  getUnreadHrmCount,
+  markHrmChatRead,
 } from "../controllers/hrmController.js";
-import { getUnreadHrmCount, markHrmChatRead } from "../controllers/hrmController.js";
 
 import { hrmUpload } from "../middleware/uploadMiddleware.js";
 
-
 const router = express.Router();
 
-// ✅ All employee routes require valid token + EMPLOYEE role
+// =======================================
+// GLOBAL GUARD → Must be logged-in Employee
+// =======================================
 router.use(authMiddleware, roleMiddleware("EMPLOYEE"));
 
-// ==========================
+// =======================================
 // PROFILE
-// ==========================
+// =======================================
 router.get("/profile", getMyProfile);
 
+// =======================================
+// HRM DOCUMENT UPLOAD
+// =======================================
 router.post(
   "/hrm/document/upload",
   employeePermission("UPLOAD_DOCUMENTS"),
-  hrmUpload.single("file"),       // 🔥 multer
+  hrmUpload.single("file"),
   uploadHrmDocument
 );
 
-router.get("/hrm/chat/unread", employeePermission("CHAT_EMPLOYEE"), getUnreadHrmCount);
-router.post("/hrm/chat/mark-read", employeePermission("CHAT_EMPLOYEE"), markHrmChatRead);
+router.get(
+  "/hrm/document/my",
+  employeePermission("UPLOAD_DOCUMENTS"),
+  getMyHrmDocuments
+);
 
-router.get("/hrm/document/my", employeePermission("UPLOAD_DOCUMENTS"), getMyHrmDocuments);
+// =======================================
+// HRM CHAT SYSTEM
+// =======================================
+router.get(
+  "/hrm/chat/unread",
+  employeePermission("CHAT_EMPLOYEE"),
+  getUnreadHrmCount
+);
 
-// Chat
-router.post("/hrm/chat/send", employeePermission("CHAT_EMPLOYEE"), sendHrmChatMessage);
-router.get("/hrm/chat/history", employeePermission("CHAT_EMPLOYEE"), getHrmChatHistory);
+router.post(
+  "/hrm/chat/mark-read",
+  employeePermission("CHAT_EMPLOYEE"),
+  markHrmChatRead
+);
 
-// ==========================
-// EMPLOYEE INFO VIEW (list of employees)
-// needs EMPLOYE_INFO_VIEW permission
-// ==========================
+router.post(
+  "/hrm/chat/send",
+  employeePermission("CHAT_EMPLOYEE"),
+  sendHrmChatMessage
+);
+
+router.get(
+  "/hrm/chat/history",
+  employeePermission("CHAT_EMPLOYEE"),
+  getHrmChatHistory
+);
+
+// =======================================
+// EMPLOYEE INFO VIEW
+// =======================================
 router.get(
   "/employees",
   employeePermission("EMPLOYE_INFO_VIEW"),
   getVisibleEmployees
 );
 
-// ==========================
-// PERMISSION-BASED MODULE ROUTES
-// ==========================
+// =======================================
+// PERMISSION BASED ROUTES
+// =======================================
 router.post(
   "/task-update",
   employeePermission("TASK_UPDATE"),
   taskUpdateHandler
 );
 
-router.post(
-  "/mis-manage",
-  employeePermission("MIS_MANAGE"),
-  misManageHandler
-);
+router.post("/mis-manage", employeePermission("MIS_MANAGE"), misManageHandler);
 
-// ✅ TASK VIEW: ALL EMPLOYEES (for users having TASK_VIEW permission)
 router.get(
   "/tasks/view",
   employeePermission("TASK_VIEW"),
@@ -161,7 +184,6 @@ router.post(
   bellRingHandler
 );
 
-
 router.post(
   "/leave/request",
   employeePermission("LEAVE_REQUEST"),
@@ -186,60 +208,42 @@ router.post(
   chatWithAdminHandler
 );
 
-router.post(
-  "/hrm/chat/send",
-  (req, res, next) => {
-    if (req.user.role === "ADMIN") return next();  // allow admin
-    return employeePermission("CHAT_EMPLOYEE")(req, res, next);
-  },
-  sendHrmChatMessage
-);
-
-
-// ==========================
-// DAILY TASK UPDATE (SELF CRUD)
-// ==========================
-
-// SAVE (DRAFT)
+// =======================================
+// DAILY TASK UPDATE SYSTEM
+// =======================================
 router.post(
   "/task-update/save",
   employeePermission("TASK_UPDATE"),
   saveTaskUpdateHandler
 );
 
-// FINAL SUBMIT (LOCK)
 router.post(
   "/task-update/final",
   employeePermission("TASK_UPDATE"),
   submitFinalTaskHandler
 );
 
-// HISTORY (LAST 10 DAYS)
 router.get(
   "/task-update/history",
   employeePermission("TASK_UPDATE"),
   getLastTenTasksHandler
 );
 
-// UPDATE TASK (EDIT SELF)
 router.patch(
   "/task-update/:taskId",
   employeePermission("TASK_UPDATE"),
   updateTaskHandler
 );
 
-// DELETE TASK FROM VIEW (for managers / viewers)
 router.delete(
   "/task/:taskId",
   employeePermission("TASK_VIEW"),
   deleteTaskHandler
 );
 
-// ==========================
+// =======================================
 // ASSIGNED TASK SYSTEM
-// ==========================
-
-// 1) Dropdown list of employees (same company)
+// =======================================
 router.get(
   "/assignable/employees",
   employeePermission("TASK_ASSIGN"),
@@ -248,42 +252,31 @@ router.get(
 
 router.post(
   "/assigned/create",
-  authMiddleware,
-  (req, res, next) => {
-    // ADMIN always allowed
-    if (req.user.role === "ADMIN") {
-      return next();
-    }
-    // EMPLOYEE permission system
-    return employeePermission("TASK_ASSIGN")(req, res, next);
-  },
+  employeePermission("TASK_ASSIGN"),
   assignTaskToEmployee
 );
 
-// 3) Outbox – tasks I assigned
 router.get(
   "/assigned/outbox",
   employeePermission("TASK_ASSIGN"),
   getTasksIAssigned
 );
 
-// 4) Inbox – tasks assigned to me
 router.get(
   "/assigned/inbox",
   employeePermission("TASK_INBOX"),
   getMyAssignedTasks
 );
 
-// 5) Respond (accept / reject) to assigned task
 router.patch(
   "/assigned/:taskId/respond",
   employeePermission("TASK_INBOX"),
   respondToAssignedTask
 );
 
-// ==========================
-// EMPLOYEE CHAT - EMPLOYEE DROPDOWN LIST
-// ==========================
+// =======================================
+// EMPLOYEE CHAT → DROPDOWN LIST
+// =======================================
 router.get(
   "/chat/employees",
   employeePermission("CHAT_EMPLOYEE"),
@@ -294,7 +287,7 @@ router.get(
       const employees = await User.find({
         createdBy: user.createdBy,
         role: "EMPLOYEE",
-        _id: { $ne: user._id }
+        _id: { $ne: user._id },
       }).select("_id email profile.name");
 
       return res.json({ employees });
@@ -304,6 +297,5 @@ router.get(
     }
   }
 );
-
 
 export default router;
