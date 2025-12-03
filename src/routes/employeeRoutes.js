@@ -269,4 +269,26 @@ router.patch(
   respondToAssignedTask
 );
 
+router.get(
+  "/chat/employees",
+  employeePermission("CHAT_EMPLOYEE"),
+  async (req, res) => {
+    try {
+      const user = req.user;
+
+      const employees = await User.find({
+        createdBy: user.createdBy,
+        role: "EMPLOYEE",
+        _id: { $ne: user._id }
+      }).select("_id email profile.name");
+
+      return res.json({ employees });
+    } catch (err) {
+      console.error("CHAT EMPLOYEE LIST ERROR:", err);
+      return res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
+
 export default router;
