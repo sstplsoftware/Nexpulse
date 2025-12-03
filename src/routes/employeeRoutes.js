@@ -89,7 +89,6 @@ router.get(
   getVisibleEmployees
 );
 
-
 // ==========================
 // PERMISSION-BASED MODULE ROUTES
 // ==========================

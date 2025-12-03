@@ -1,9 +1,12 @@
 import multer from "multer";
-import { CloudinaryStorage } from "multer-storage-cloudinary";
+import pkg from "multer-storage-cloudinary";   // <-- FIX
 import cloudinary from "../config/cloudinary.js";
 
+const { CloudinaryStorage } = pkg; // <-- Proper destructuring for CJS modules
+
+// Configure Cloudinary storage
 const storage = new CloudinaryStorage({
-  cloudinary,
+  cloudinary: cloudinary,
   params: {
     folder: "nexpulse/hrm-docs",
     resource_type: "auto",
