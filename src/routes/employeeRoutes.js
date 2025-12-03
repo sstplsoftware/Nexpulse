@@ -281,9 +281,9 @@ router.get(
       const user = req.user;
 
       const employees = await User.find({
-        createdBy: user.createdBy,     // same company admin
+        createdBy: user.createdBy,
         role: "EMPLOYEE",
-        _id: { $ne: user._id }         // exclude myself
+        _id: { $ne: user._id }
       }).select("_id email profile.name");
 
       return res.json({ employees });
@@ -293,4 +293,5 @@ router.get(
     }
   }
 );
+
 export default router;
