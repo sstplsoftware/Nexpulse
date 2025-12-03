@@ -11,10 +11,11 @@ import {
   getSingleEmployee,
 } from "../controllers/adminController.js";
 
+// ✅ REPLACE OLD WRONG CONTROLLERS WITH FIXED ONES
 import {
-  getAllTasksForAdmin,
-  deleteTaskByAdmin,
-} from "../controllers/adminTaskController.js";
+  getAllTasksForViewHandler,
+  deleteTaskHandler,
+} from "../controllers/taskController.js";
 
 import {
   getTasksIAssigned,
@@ -26,29 +27,41 @@ const router = express.Router();
 
 router.use(authMiddleware, roleMiddleware("ADMIN"));
 
+// ======================================================
 // EMPLOYEE CRUD
+// ======================================================
 router.get("/employees", getEmployees);
 router.post("/employees", createEmployee);
 router.put("/employees/:id", updateEmployee);
 router.delete("/employees/:id", deleteEmployee);
 router.get("/employees/:id", getSingleEmployee);
 
-// Admin all task view
-router.get("/tasks/all", getAllTasksForAdmin);
+// ======================================================
+// ADMIN TASK VIEW  (🔥 FIXED)
+// ======================================================
 
-// Admin delete a task
-router.delete("/task/:taskId", deleteTaskByAdmin);
+// ✔ Admin sees ALL tasks of ALL employees under him
+router.get("/tasks/all", getAllTasksForViewHandler);
 
-// ==========================
-// ADMIN TASK MODULE FIX
-// ==========================
+// ✔ Admin deletes a task
+router.delete("/task/:taskId", deleteTaskHandler);
 
-// ✔ Inbox (tasks assigned TO admin)
+// ======================================================
+// ADMIN ASSIGNED TASK SYSTEM
+// ======================================================
+
+// ✔ Tasks assigned TO admin (Inbox)
 router.get("/assigned/inbox", getMyAssignedTasks);
 
-// ✔ Outbox (tasks admin assigned to others)
+// ✔ Tasks admin assigned to employees (Outbox)
 router.get("/assigned/outbox", getTasksIAssigned);
 
-router.post("/task/assign",authMiddleware,roleMiddleware("ADMIN"),assignTaskToEmployee);
+// ✔ Assign new task to employee
+router.post(
+  "/task/assign",
+  authMiddleware,
+  roleMiddleware("ADMIN"),
+  assignTaskToEmployee
+);
 
 export default router;
