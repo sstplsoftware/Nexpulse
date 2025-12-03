@@ -4,6 +4,7 @@ import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { roleMiddleware } from "../middleware/roleMiddleware.js";
 import { employeePermission } from "../middleware/permissionMiddleware.js";
+import User from "../models/User.js";
 
 import {
   getMyProfile,
@@ -269,7 +270,10 @@ router.patch(
   respondToAssignedTask
 );
 
-uter.get(
+// ==========================
+// EMPLOYEE CHAT - EMPLOYEE DROPDOWN LIST
+// ==========================
+router.get(
   "/chat/employees",
   employeePermission("CHAT_EMPLOYEE"),
   async (req, res) => {
@@ -277,9 +281,9 @@ uter.get(
       const user = req.user;
 
       const employees = await User.find({
-        createdBy: user.createdBy,  // same company
+        createdBy: user.createdBy,     // same company admin
         role: "EMPLOYEE",
-        _id: { $ne: user._id }       // exclude myself
+        _id: { $ne: user._id }         // exclude myself
       }).select("_id email profile.name");
 
       return res.json({ employees });
@@ -289,5 +293,4 @@ uter.get(
     }
   }
 );
-
 export default router;
