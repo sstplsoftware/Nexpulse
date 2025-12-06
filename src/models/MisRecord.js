@@ -9,6 +9,7 @@ const misRecordSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
     createdByUser: {
       type: mongoose.Schema.Types.ObjectId,
@@ -19,7 +20,9 @@ const misRecordSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
+
     uploadSource: {
       type: String,
       enum: ["excel", "manual"],
@@ -27,14 +30,14 @@ const misRecordSchema = new mongoose.Schema(
     },
 
     // Soft delete
-    isDeleted: { type: Boolean, default: false },
+    isDeleted: { type: Boolean, default: false, index: true },
     deletedAt: { type: Date, default: null },
     deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
 
-    // Ordering for "add row in between"
-    orderIndex: { type: Number, default: 0 },
+    // Ordering for "insert row in between"
+    orderIndex: { type: Number, default: 0, index: true },
 
-    // Fast filter fields (camelCase)
+    // Fast filter fields
     batchId: { type: String, index: true },
     schemeProgramModel: { type: String, index: true },
     sectorSSCName: { type: String, index: true },
@@ -45,11 +48,11 @@ const misRecordSchema = new mongoose.Schema(
     assessmentStatus: { type: String, index: true },
     resultStatus: { type: String, index: true },
 
-    // The full MIS row, keyed by your master headings
+    // Main MIS row stored as Map
     rowData: {
       type: Map,
       of: String,
-      default: {},
+      default: () => ({}),  // IMPORTANT FIX
     },
 
     // Audit

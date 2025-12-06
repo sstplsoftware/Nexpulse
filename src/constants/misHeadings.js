@@ -1,5 +1,8 @@
 // C:\NexPulse\backend\src\constants\misHeadings.js
 
+// Master MIS headings – EXACTLY matching your master sheet
+// (Order is preserved; duplicates are removed)
+
 export const MIS_MASTER_HEADINGS = [
   "Sr No.",
   "Scheme/Program/Model",
@@ -14,7 +17,7 @@ export const MIS_MASTER_HEADINGS = [
   "Job Role Name",
   "Job Role Code",
   "Job Role Level",
-  "Job Role Version",
+  "Job RoleVersion",
   "Preferred Assessment Language",
   "Batch Size",
   "Enrolled Candidates",
@@ -26,8 +29,8 @@ export const MIS_MASTER_HEADINGS = [
   "TC Name",
   "TC ID",
   "Traning Center Address (TC)",
-  "District",
-  "State",
+  "TC District",
+  "TC State",
   "TC Pin Code",
   "TP Spoc Name",
   "TP Spoc No.",
@@ -64,7 +67,6 @@ export const MIS_MASTER_HEADINGS = [
   "Parent Batch Id",
   "Theory/OJT",
   "Received Through SIP/LMS Portal",
-  "Date Batch Received",
   "Batch Category",
   "Project",
   "Course Code",
