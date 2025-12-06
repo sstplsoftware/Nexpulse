@@ -14,6 +14,7 @@ dotenv.config({ path: path.join(__dirname, "../.env") });
 import express from "express";
 import cors from "cors";
 import http from "http";
+import { Server } from "socket.io"; // ✅ Socket.IO here
 
 // DB
 import { connectDB } from "./config/db.js";
@@ -35,7 +36,7 @@ const app = express();
 const httpServer = http.createServer(app);
 
 /* =====================================================
-   CORS CONFIG — FIXED FOR LOCALHOST + RENDER WEBSOCKETS
+   CORS CONFIG — LOCALHOST + RENDER
 ===================================================== */
 export const allowedOrigins = [
   "http://localhost:5173",
@@ -65,17 +66,22 @@ app.use(
   })
 );
 
-// Required for OPTIONS preflight
+// OPTIONS preflight handler (Express 5-safe)
 app.use((req, res, next) => {
   if (req.method === "OPTIONS") {
     res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
-    res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.header(
+      "Access-Control-Allow-Methods",
+      "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+    );
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization"
+    );
     return res.sendStatus(200);
   }
   next();
 });
-
 
 /* =====================================================
    PARSERS
@@ -108,6 +114,19 @@ app.get("/", (req, res) => {
 });
 
 /* =====================================================
+   SOCKET.IO — SINGLE INSTANCE
+===================================================== */
+const io = new Server(httpServer, {
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  },
+  transports: ["websocket", "polling"],
+});
+
+/* =====================================================
    START SERVER + SOCKETS
 ===================================================== */
 const PORT = process.env.PORT || 5000;
@@ -116,9 +135,9 @@ async function start() {
   await connectDB();
   console.log("📌 MongoDB Connected Successfully");
 
-  // Socket initialization must happen *AFTER* DB connection & BEFORE listen()
-  initBellSocket(httpServer);
-  initHrmSocket(httpServer);
+  // ✅ Pass the ONE io instance into your socket modules
+  initBellSocket(io);
+  initHrmSocket(io);
 
   httpServer.listen(PORT, () => {
     console.log(`🚀 Server + WebSockets running on port ${PORT}`);
