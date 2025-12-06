@@ -270,25 +270,10 @@ export async function listMisRecordsAdmin(req, res) {
     ]);
 
     const formatted = records.map((r) => ({
-      _id: r._id,
-      batchId: r.batchId,
-      schemeProgramModel: r.schemeProgramModel,
-      sectorSSCName: r.sectorSSCName,
-      assessorName: r.assessorName,
-      assessmentStatus: r.assessmentStatus,
-      resultStatus: r.resultStatus,
-      batchStartDate: r.batchStartDate,
-      batchEndDate: r.batchEndDate,
-      lastEditedBy: r.lastEditedBy
-        ? {
-            _id: r.lastEditedBy._id,
-            name: r.lastEditedBy.profile?.name || "",
-            role: r.lastEditedBy.role,
-          }
-        : null,
-      lastEditedAt: r.lastEditedAt,
-      orderIndex: r.orderIndex,
-    }));
+  ...r,                                      // include entire document
+  ...Object.fromEntries(r.rowData || []),    // flatten all 150+ Excel fields
+}));
+
 
     return res.json({
       page: pageNum,
