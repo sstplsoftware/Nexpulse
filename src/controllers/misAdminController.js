@@ -5,6 +5,76 @@ import MisRecord from "../models/MisRecord.js";
 import MisActivityLog from "../models/MisActivityLog.js";
 import { MIS_MASTER_HEADINGS } from "../constants/misHeadings.js";
 import { buildRowDataFromExcelRow, extractFilterFields } from "../utils/misUtils.js";
+import { getAdminScopeFromUser } from "../utils/misUtils.js"; // add at top with other imports
+
+// ... keep all other functions above as they are ...
+
+/**
+ * GET /api/admin/mis/export-all
+ * Download MIS DB for this admin scope (ADMIN or EMPLOYEE with MIS_MANAGE)
+ * Uses same filters as listMisRecordsAdmin.
+ */
+export async function exportAllMisAdmin(req, res) {
+  try {
+    const adminId = getAdminScopeFromUser(req.user);
+
+    if (!adminId) {
+      return res.status(403).json({ message: "Admin scope missing" });
+    }
+
+    const {
+      batchId,
+      scheme,
+      ssc,
+      arId,
+      assessorName,
+      assessmentStatus,
+      resultStatus,
+      startDate,
+      endDate,
+    } = req.query;
+
+    const query = {
+      visibleToAdmin: adminId,
+      isDeleted: false,
+    };
+
+    if (batchId) query.batchId = batchId;
+    if (scheme) query.schemeProgramModel = scheme;
+    if (ssc) query.sectorSSCName = ssc;
+    if (arId) query.assessorArId = arId;
+    if (assessorName) query.assessorName = new RegExp(assessorName, "i");
+    if (assessmentStatus) query.assessmentStatus = assessmentStatus;
+    if (resultStatus) query.resultStatus = resultStatus;
+
+    if (startDate || endDate) {
+      query.batchStartDate = {};
+      if (startDate) query.batchStartDate.$gte = new Date(startDate);
+      if (endDate) query.batchStartDate.$lte = new Date(endDate);
+    }
+
+    const records = await MisRecord.find(query)
+      .sort({ orderIndex: 1 })
+      .lean();
+
+    const rows = records.map((r) =>
+      Object.fromEntries(r.rowData || [])
+    );
+
+    return res.json({
+      adminId,
+      count: rows.length,
+      headings: MIS_MASTER_HEADINGS,
+      rows,
+    });
+  } catch (err) {
+    console.error("exportAllMisAdmin error:", err);
+    return res
+      .status(500)
+      .json({ message: "Server error while exporting MIS" });
+  }
+}
+
 
 /**
  * Helper: create activity log
@@ -518,5 +588,66 @@ export async function exportAllMisAdmin(req, res) {
   } catch (err) {
     console.error("exportAllMisAdmin error:", err);
     return res.status(500).json({ message: "Server error while exporting MIS" });
+  }
+}
+
+export async function exportAllMisAdmin(req, res) {
+  try {
+    const adminId = getAdminScopeFromUser(req.user);
+
+    if (!adminId) {
+      return res.status(403).json({ message: "Admin scope missing" });
+    }
+
+    const {
+      batchId,
+      scheme,
+      ssc,
+      arId,
+      assessorName,
+      assessmentStatus,
+      resultStatus,
+      startDate,
+      endDate,
+    } = req.query;
+
+    const query = {
+      visibleToAdmin: adminId,
+      isDeleted: false,
+    };
+
+    if (batchId) query.batchId = batchId;
+    if (scheme) query.schemeProgramModel = scheme;
+    if (ssc) query.sectorSSCName = ssc;
+    if (arId) query.assessorArId = arId;
+    if (assessorName) query.assessorName = new RegExp(assessorName, "i");
+    if (assessmentStatus) query.assessmentStatus = assessmentStatus;
+    if (resultStatus) query.resultStatus = resultStatus;
+
+    if (startDate || endDate) {
+      query.batchStartDate = {};
+      if (startDate) query.batchStartDate.$gte = new Date(startDate);
+      if (endDate) query.batchStartDate.$lte = new Date(endDate);
+    }
+
+    const records = await MisRecord.find(query)
+      .sort({ orderIndex: 1 })
+      .lean();
+
+    const rows = records.map((r) =>
+      Object.fromEntries(r.rowData || [])
+    );
+
+    return res.json({
+      adminId,
+      count: rows.length,
+      headings: MIS_MASTER_HEADINGS,
+      rows,
+    });
+  } catch (err) {
+    console.error("exportAllMisAdmin error:", err);
+    return res
+      .status(500)
+      .json({ message: "Server error while exporting MIS" });
   }
 }

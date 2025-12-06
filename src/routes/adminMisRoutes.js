@@ -3,7 +3,7 @@
 import express from "express";
 import multer from "multer";
 import { authMiddleware } from "../middleware/authMiddleware.js";
-import { roleMiddleware } from "../middleware/roleMiddleware.js";
+import { misAccessGuard } from "../middleware/permissionMiddleware.js";
 import {
   uploadMisExcelAdmin,
   createMisRecordAdmin,
@@ -18,10 +18,10 @@ import {
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// All routes require ADMIN
-router.use(authMiddleware, roleMiddleware("ADMIN"));
+// ✅ Any user with MIS access (ADMIN or EMPLOYEE+MIS_MANAGE)
+router.use(authMiddleware, misAccessGuard);
 
-// Upload Excel
+// Upload Excel (ADMIN will use this; EMPLOYEE has its own /employee/mis/upload)
 router.post("/upload", upload.single("file"), uploadMisExcelAdmin);
 
 // Manual add row
@@ -42,7 +42,7 @@ router.delete("/records/:id", deleteMisRecordAdmin);
 // History
 router.get("/records/:id/history", getMisRecordHistoryAdmin);
 
-// Export all
+// Export (filtered)
 router.get("/export-all", exportAllMisAdmin);
 
 export default router;

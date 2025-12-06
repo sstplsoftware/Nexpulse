@@ -1,11 +1,6 @@
 // C:\NexPulse\backend\src\constants\misHeadings.js
 
-import { sanitizeHeading } from "../utils/misUtils.js";
-
-/**
- * ORIGINAL headings exactly from master sheet
- * (124 headings)
- */
+// 1) RAW headings – EXACT text as in your master Excel
 export const RAW_MIS_HEADINGS = [
   "Sr No.",
   "Scheme/Program/Model",
@@ -130,13 +125,23 @@ export const RAW_MIS_HEADINGS = [
   "Uploaded Date",
   "SDMIS Portal",
   "Audit link",
-  "Document Status"
+  "Document Status",
 ];
 
-/**
- * SANITIZED headings to store inside MongoDB Map safely
- * (removes dots, spaces, /, (), etc.)
- */
-export const MIS_MASTER_HEADINGS = RAW_MIS_HEADINGS.map(h =>
+// 2) Sanitize heading so MongoDB Map can accept as key
+export function sanitizeHeading(heading = "") {
+  return String(heading)
+    .replace(/\./g, "")       // remove dots
+    .replace(/\(/g, "")       // remove (
+    .replace(/\)/g, "")       // remove )
+    .replace(/\//g, "_")      // replace /
+    .replace(/\s+/g, "_")     // spaces -> _
+    .replace(/__+/g, "_")     // avoid double _
+    .trim();
+}
+
+// 3) Final master headings used as Map keys & for manual rowData
+// e.g. "Scheme/Program/Model" -> "Scheme_Program_Model"
+export const MIS_MASTER_HEADINGS = RAW_MIS_HEADINGS.map((h) =>
   sanitizeHeading(h)
 );
