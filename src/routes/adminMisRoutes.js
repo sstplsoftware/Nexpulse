@@ -15,6 +15,8 @@ import {
   exportAllMisAdmin,
 } from "../controllers/misAdminController.js";
 
+import { getMisMeta } from "../controllers/misMetaController.js";
+
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -44,5 +46,7 @@ router.get("/records/:id/history", getMisRecordHistoryAdmin);
 
 // Export (filtered)
 router.get("/export-all", exportAllMisAdmin);
+
+router.get("/meta", getMisMeta);
 
 export default router;

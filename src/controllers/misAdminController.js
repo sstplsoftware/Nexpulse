@@ -14,14 +14,41 @@ import { getAdminScopeFromUser } from "../utils/misUtils.js"; // add at top with
  * Download MIS DB for this admin scope (ADMIN or EMPLOYEE with MIS_MANAGE)
  * Uses same filters as listMisRecordsAdmin.
  */
+/**
+ * GET /api/admin/mis/export-all
+ * Export ALL MIS rows for this admin (used internally)
+ */
 export async function exportAllMisAdmin(req, res) {
   try {
-    const adminId = getAdminScopeFromUser(req.user);
+    const adminId = req.user._id;
 
-    if (!adminId) {
-      return res.status(403).json({ message: "Admin scope missing" });
-    }
+    const records = await MisRecord.find({
+      visibleToAdmin: adminId,
+      isDeleted: false,
+    })
+      .sort({ orderIndex: 1 })
+      .lean();
 
+    const rows = records.map((r) => Object.fromEntries(r.rowData || []));
+
+    return res.json({
+      adminId,
+      count: rows.length,
+      headings: MIS_MASTER_HEADINGS,
+      rows,
+    });
+  } catch (err) {
+    console.error("exportAllMisAdmin error:", err);
+    return res.status(500).json({ message: "Server error while exporting MIS" });
+  }
+}
+/**
+ * GET /api/admin/mis/export-filtered
+ * Returns only filtered rows (for UI export button)
+ */
+export async function exportFilteredMisAdmin(req, res) {
+  try {
+    const adminId = req.user._id;
     const {
       batchId,
       scheme,
@@ -57,23 +84,19 @@ export async function exportAllMisAdmin(req, res) {
       .sort({ orderIndex: 1 })
       .lean();
 
-    const rows = records.map((r) =>
-      Object.fromEntries(r.rowData || [])
-    );
+    const rows = records.map((r) => Object.fromEntries(r.rowData || []));
 
     return res.json({
-      adminId,
-      count: rows.length,
+      filteredCount: rows.length,
       headings: MIS_MASTER_HEADINGS,
       rows,
     });
   } catch (err) {
-    console.error("exportAllMisAdmin error:", err);
-    return res
-      .status(500)
-      .json({ message: "Server error while exporting MIS" });
+    console.error("exportFilteredMisAdmin error:", err);
+    return res.status(500).json({ message: "Server error while exporting filtered MIS" });
   }
 }
+
 
 
 /**
