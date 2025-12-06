@@ -1,4 +1,4 @@
-// src/controllers/misAdminController.js
+// C:\NexPulse\backend\src\controllers\misAdminController.js
 
 import XLSX from "xlsx";
 import MisRecord from "../models/MisRecord.js";
@@ -8,13 +8,18 @@ import {
   buildRowDataFromExcelRow,
   extractFilterFields,
   getAdminScopeFromUser,
+  excelToJSDate,
 } from "../utils/misUtils.js";
 
 /**
  * Helper: create activity log
- * used by many endpoints to record create/update/delete actions
  */
-async function logActivity({ misRecordId, user, action, changedFields = null }) {
+async function logActivity({
+  misRecordId,
+  user,
+  action,
+  changedFields = null,
+}) {
   try {
     await MisActivityLog.create({
       misRecordId,
@@ -27,6 +32,7 @@ async function logActivity({ misRecordId, user, action, changedFields = null }) 
     console.error("MIS ActivityLog error:", err.message);
   }
 }
+
 /**
  * POST /api/admin/mis/upload
  * Admin Excel upload
@@ -55,16 +61,10 @@ export async function uploadMisExcelAdmin(req, res) {
     let currentOrderIndex = lastRecord ? lastRecord.orderIndex : 0;
 
     for (const rawRow of jsonRows) {
+      // 🔹 Build rich rowData (Option B part: map + excel dates inside)
       const rowData = buildRowDataFromExcelRow(rawRow);
-      // Convert Excel numeric date if necessary
-if (rawRow.Batch_Start_Date) {
-  rowData.Batch_Start_Date = excelToJSDate(rawRow.Batch_Start_Date);
-}
 
-if (rawRow.Batch_End_Date) {
-  rowData.Batch_End_Date = excelToJSDate(rawRow.Batch_End_Date);
-}
-
+      // 🔹 Extract top-level filters (Option A part)
       const filters = extractFilterFields(rowData);
 
       currentOrderIndex += 1;
@@ -76,7 +76,7 @@ if (rawRow.Batch_End_Date) {
         uploadSource: "excel",
         orderIndex: currentOrderIndex,
         ...filters,
-        rowData,
+        rowData, // plain object with all fields
         lastEditedBy: req.user._id,
         lastEditedAt: new Date(),
       });
@@ -96,7 +96,9 @@ if (rawRow.Batch_End_Date) {
     });
   } catch (err) {
     console.error("uploadMisExcelAdmin error:", err);
-    return res.status(500).json({ message: "Server error while uploading MIS" });
+    return res
+      .status(500)
+      .json({ message: "Server error while uploading MIS" });
   }
 }
 
@@ -107,7 +109,8 @@ if (rawRow.Batch_End_Date) {
 export async function createMisRecordAdmin(req, res) {
   try {
     const adminId = req.user._id;
-    const { rowData: partialRowData = {}, insertAfterId, insertBeforeId } = req.body || {};
+    const { rowData: partialRowData = {}, insertAfterId, insertBeforeId } =
+      req.body || {};
 
     // Normalize rowData: every master heading present, NA if missing
     const rowData = {};
@@ -206,7 +209,9 @@ export async function createMisRecordAdmin(req, res) {
     });
   } catch (err) {
     console.error("createMisRecordAdmin error:", err);
-    return res.status(500).json({ message: "Server error while creating MIS record" });
+    return res
+      .status(500)
+      .json({ message: "Server error while creating MIS record" });
   }
 }
 
@@ -294,9 +299,12 @@ export async function listMisRecordsAdmin(req, res) {
     });
   } catch (err) {
     console.error("listMisRecordsAdmin error:", err);
-    return res.status(500).json({ message: "Server error while listing MIS records" });
+    return res
+      .status(500)
+      .json({ message: "Server error while listing MIS records" });
   }
 }
+
 /**
  * GET /api/admin/mis/records/:id
  */
@@ -320,7 +328,9 @@ export async function getMisRecordAdmin(req, res) {
     return res.json(record);
   } catch (err) {
     console.error("getMisRecordAdmin error:", err);
-    return res.status(500).json({ message: "Server error while fetching MIS record" });
+    return res
+      .status(500)
+      .json({ message: "Server error while fetching MIS record" });
   }
 }
 
@@ -343,26 +353,30 @@ export async function updateMisRecordAdmin(req, res) {
       return res.status(404).json({ message: "MIS record not found" });
     }
 
+    // Ensure rowData is plain object
+    if (!record.rowData || typeof record.rowData !== "object") {
+      record.rowData = {};
+    }
+
     const changedFields = {};
 
-    // Update rowData
+    // Update rowData from updates (these keys will be internal ones you choose)
     for (const [heading, newValue] of Object.entries(rowDataUpdates)) {
-      if (!MIS_MASTER_HEADINGS.includes(heading)) continue;
+      const prev = record.rowData[heading];
 
-      const prev = record.rowData.get(heading);
       const val =
         newValue === undefined || newValue === null || newValue === ""
           ? "NA"
           : String(newValue).trim();
 
       if (prev !== val) {
-        record.rowData.set(heading, val);
+        record.rowData[heading] = val;
         changedFields[heading] = { old: prev, new: val };
       }
     }
 
-    // Re-extract filter fields
-    const filters = extractFilterFields(Object.fromEntries(record.rowData));
+    // Re-extract filter fields from updated rowData
+    const filters = extractFilterFields(record.rowData);
     Object.assign(record, filters);
 
     // Move position if requested
@@ -431,7 +445,9 @@ export async function updateMisRecordAdmin(req, res) {
     return res.json({ message: "MIS record updated successfully" });
   } catch (err) {
     console.error("updateMisRecordAdmin error:", err);
-    return res.status(500).json({ message: "Server error while updating MIS record" });
+    return res
+      .status(500)
+      .json({ message: "Server error while updating MIS record" });
   }
 }
 
@@ -471,7 +487,9 @@ export async function deleteMisRecordAdmin(req, res) {
     return res.json({ message: "MIS record deleted (soft delete)" });
   } catch (err) {
     console.error("deleteMisRecordAdmin error:", err);
-    return res.status(500).json({ message: "Server error while deleting MIS record" });
+    return res
+      .status(500)
+      .json({ message: "Server error while deleting MIS record" });
   }
 }
 
@@ -500,7 +518,9 @@ export async function getMisRecordHistoryAdmin(req, res) {
     return res.json({ history });
   } catch (err) {
     console.error("getMisRecordHistoryAdmin error:", err);
-    return res.status(500).json({ message: "Server error while fetching MIS history" });
+    return res
+      .status(500)
+      .json({ message: "Server error while fetching MIS history" });
   }
 }
 
@@ -551,7 +571,11 @@ export async function exportFilteredMisAdmin(req, res) {
       .sort({ orderIndex: 1 })
       .lean();
 
-    const rows = records.map((r) => Object.fromEntries(r.rowData || []));
+    const rows = records.map((r) =>
+      r.rowData instanceof Map
+        ? Object.fromEntries(r.rowData)
+        : r.rowData || {}
+    );
 
     return res.json({
       filteredCount: rows.length,
@@ -560,13 +584,15 @@ export async function exportFilteredMisAdmin(req, res) {
     });
   } catch (err) {
     console.error("exportFilteredMisAdmin error:", err);
-    return res.status(500).json({ message: "Server error while exporting filtered MIS" });
+    return res
+      .status(500)
+      .json({ message: "Server error while exporting filtered MIS" });
   }
 }
+
 /**
  * GET /api/admin/mis/export-all
  * Download entire MIS DB for this admin scope (as JSON rows)
- * This is the single, definitive implementation (scope-aware).
  */
 export async function exportAllMisAdmin(req, res) {
   try {
@@ -576,7 +602,6 @@ export async function exportAllMisAdmin(req, res) {
       return res.status(403).json({ message: "Admin scope missing" });
     }
 
-    // Optional query filters supported (same as filtered export)
     const {
       batchId,
       scheme,
@@ -612,7 +637,11 @@ export async function exportAllMisAdmin(req, res) {
       .sort({ orderIndex: 1 })
       .lean();
 
-    const rows = records.map((r) => Object.fromEntries(r.rowData || []));
+    const rows = records.map((r) =>
+      r.rowData instanceof Map
+        ? Object.fromEntries(r.rowData)
+        : r.rowData || {}
+    );
 
     return res.json({
       adminId,
@@ -622,6 +651,8 @@ export async function exportAllMisAdmin(req, res) {
     });
   } catch (err) {
     console.error("exportAllMisAdmin error:", err);
-    return res.status(500).json({ message: "Server error while exporting MIS" });
+    return res
+      .status(500)
+      .json({ message: "Server error while exporting MIS" });
   }
 }
