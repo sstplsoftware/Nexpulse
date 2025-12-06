@@ -56,6 +56,15 @@ export async function uploadMisExcelAdmin(req, res) {
 
     for (const rawRow of jsonRows) {
       const rowData = buildRowDataFromExcelRow(rawRow);
+      // Convert Excel numeric date if necessary
+if (rawRow.Batch_Start_Date) {
+  rowData.Batch_Start_Date = excelToJSDate(rawRow.Batch_Start_Date);
+}
+
+if (rawRow.Batch_End_Date) {
+  rowData.Batch_End_Date = excelToJSDate(rawRow.Batch_End_Date);
+}
+
       const filters = extractFilterFields(rowData);
 
       currentOrderIndex += 1;

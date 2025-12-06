@@ -118,22 +118,14 @@ const HEADER_TO_FIELD = {
   "assessment end time": "assessmentEndTime",
   "candidates registered": "candidatesRegistered",
 
+  // "Average % Marks Obtained (Less than or equal to 100% )" & variants
   "average marks obtained less than or equal to 100": "averageMarks",
   "average marks obtained lessthan or equal to 100": "averageMarks",
   "average marks obtainedless than or equal to 100": "averageMarks",
-  "average marks obtained less than or equal to 100 ": "averageMarks",
+  "average marks obtained  less than or equal to 100": "averageMarks",
   "average  marks obtained lessthan or equal to 100": "averageMarks",
-  "average marks obtained less than or equal to 100 ": "averageMarks",
-  "average  marks obtained less than or equal to 100": "averageMarks",
-  "average marks obtained less than or equal to 100": "averageMarks",
   "average  marks obtainedless than or equal to 100": "averageMarks",
   "average  marks obtained  less than or equal to 100": "averageMarks",
-  "average  marks obtained lessthan or equal to 100 ": "averageMarks",
-  "average marks obtained  less than or equal to 100": "averageMarks",
-  "average  marks obtainedless than or equal to 100 ": "averageMarks",
-  "average  marks obtained  less than or equal to 100 ": "averageMarks",
-  "average  marks obtained lessthan or equal to 100  ": "averageMarks",
-  // ^^^ many sheets mangle this. Simplify: you can collapse & just map normalized.
 
   "coordinator name": "coordinatorName",
   "coordinator contact": "coordinatorContact",

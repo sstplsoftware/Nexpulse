@@ -5,65 +5,54 @@ import {
   MIS_MASTER_HEADINGS,
   sanitizeHeading,
 } from "../constants/misHeadings.js";
+import { mapExcelRowsToMisDocs } from "./misExcelMapper.js";
 
 /**
- * Normalize for matching Excel column names
- * (sanitized + lowercased)
+ * Normalize Excel headers into canonical comparable form
  */
 function normalizeHeading(str = "") {
   return sanitizeHeading(str).toLowerCase();
 }
 
 /**
- * Converts an Excel row → Map(sanitizedHeading → value)
- * Example key: "Scheme_Program_Model"
+ * Convert Excel date serial → JS Date
+ * Example:
+ *   45287 → 2023-12-12 (correct)
  */
-export function buildRowDataFromExcelRow(rawRow = {}) {
-  const rowMap = new Map();
-
-  // Build lookup: normalized (raw) → sanitized (canonical)
-  const lookup = {};
-  RAW_MIS_HEADINGS.forEach((h) => {
-    lookup[normalizeHeading(h)] = sanitizeHeading(h);
-  });
-
-  // Map Excel → sanitized keys
-  for (const [key, rawVal] of Object.entries(rawRow)) {
-    if (!key) continue;
-
-    const norm = normalizeHeading(key);
-    const sanitized = lookup[norm];
-
-    if (!sanitized) continue; // ignore unknown columns
-
-    const value =
-      rawVal === undefined || rawVal === null || rawVal === ""
-        ? "NA"
-        : String(rawVal).trim();
-
-    rowMap.set(sanitized, value);
-  }
-
-  // Ensure all master headings exist
-  MIS_MASTER_HEADINGS.forEach((h) => {
-    if (!rowMap.has(h)) rowMap.set(h, "NA");
-  });
-
-  return rowMap;
+export function excelToJSDate(serial) {
+  const n = Number(serial);
+  if (!n || isNaN(n)) return null;
+  const ms = (n - 25569) * 86400 * 1000;
+  const d = new Date(ms);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 /**
- * Read value from Map or plain object
+ * Build rowData from Excel row.
+ * Now uses mapExcelRowsToMisDocs → consistent mapping across backend.
+ */
+export function buildRowDataFromExcelRow(rawRow = {}) {
+  const mappedDocs = mapExcelRowsToMisDocs([rawRow]);
+  return mappedDocs[0]; // single doc returned
+}
+
+/**
+ * Helper for safely reading from Map OR plain object
  */
 function getValue(source, key) {
   if (!source) return "";
-  return source instanceof Map ? source.get(key) || "" : source[key] || "";
+  if (source instanceof Map) return source.get(key) || "";
+  return source[key] || "";
 }
 
 /**
- * Extract DB filter fields
- * Uses **sanitized** keys to read from rowData:
- *   Batch_Id, Scheme_Program_Model, Sector_SSC_Name, Assessor_AR_ID, etc.
+ * Extract DB-level searchable fields from rowData
+ * rowData keys are SANITIZED, e.g.:
+ *   Batch_Id
+ *   Scheme_Program_Model
+ *   Sector_SSC_Name
+ *   Assessor_AR_ID
+ *   Batch_Start_Date
  */
 export function extractFilterFields(rowData) {
   const map = {
@@ -80,30 +69,30 @@ export function extractFilterFields(rowData) {
 
   const filters = {};
 
-  for (const [cleanKey, field] of Object.entries(map)) {
+  for (const [cleanKey, finalField] of Object.entries(map)) {
     const raw = getValue(rowData, cleanKey);
 
-    if (field === "batchStartDate" || field === "batchEndDate") {
+    // Handle dates
+    if (finalField === "batchStartDate" || finalField === "batchEndDate") {
       if (!raw || raw === "NA") {
-        filters[field] = null;
+        filters[finalField] = null;
         continue;
       }
 
-      // Try parse as normal date string
-      let parsed = new Date(raw);
-
-      // If invalid and looks like Excel serial (number-ish), convert
-      if (isNaN(parsed.getTime()) && !isNaN(Number(raw))) {
-        const excelSerial = Number(raw);
-        // Excel serial date: days since 1899-12-30
-        const jsMillis = (excelSerial - 25569) * 24 * 60 * 60 * 1000;
-        parsed = new Date(jsMillis);
+      // Excel serial date (e.g. "45287")
+      if (!isNaN(Number(raw))) {
+        filters[finalField] = excelToJSDate(raw);
+        continue;
       }
 
-      filters[field] = isNaN(parsed.getTime()) ? null : parsed;
-    } else {
-      filters[field] = raw ? String(raw).trim() : "";
+      // Normal date string
+      const parsed = new Date(raw);
+      filters[finalField] = isNaN(parsed.getTime()) ? null : parsed;
+      continue;
     }
+
+    // Normal string field
+    filters[finalField] = raw ? String(raw).trim() : "";
   }
 
   return filters;
@@ -111,9 +100,9 @@ export function extractFilterFields(rowData) {
 
 /**
  * Determine admin scope
- * - ADMIN   → self _id
- * - EMPLOYEE → createdBy
- * - other   → null
+ *
+ * ADMIN    → self._id
+ * EMPLOYEE → createdBy (the admin who owns him)
  */
 export function getAdminScopeFromUser(user) {
   if (!user) return null;
