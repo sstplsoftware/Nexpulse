@@ -52,6 +52,15 @@ import {
   respondToAssignedTask,
 } from "../controllers/assignedTaskController.js";
 
+import multer from "multer";
+import {
+  uploadMisExcelEmployee,
+  listMisRecordsEmployee,
+  getMisRecordEmployee,
+  updateMisRecordEmployee,
+} from "../controllers/misEmployeeController.js";
+
+
 import { hrmUpload } from "../middleware/uploadMiddleware.js";
 
 const router = express.Router();
@@ -68,6 +77,7 @@ router.use(roleMiddleware("EMPLOYEE"));
 
 // PROFILE
 router.get("/profile", getMyProfile);
+const upload = multer({ storage: multer.memoryStorage() });
 
 // DOCUMENTS
 router.post(
@@ -81,6 +91,40 @@ router.get(
   "/hrm/document/my",
   employeePermission("UPLOAD_DOCUMENTS"),
   getMyHrmDocuments
+);
+
+
+// ==========================
+// MIS MODULE (Employee)
+// ==========================
+
+// Upload MIS via Excel
+router.post(
+  "/mis/upload",
+  employeePermission("MIS_MANAGE"),
+  upload.single("file"),
+  uploadMisExcelEmployee
+);
+
+// List MIS records
+router.get(
+  "/mis/records",
+  employeePermission("MIS_MANAGE"), // or MIS_VIEW if you want separate
+  listMisRecordsEmployee
+);
+
+// Get single MIS record
+router.get(
+  "/mis/records/:id",
+  employeePermission("MIS_MANAGE"),
+  getMisRecordEmployee
+);
+
+// Update MIS record
+router.patch(
+  "/mis/records/:id",
+  employeePermission("MIS_MANAGE"),
+  updateMisRecordEmployee
 );
 
 // ========================================================

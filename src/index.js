@@ -26,6 +26,8 @@ import bellRoutes from "./routes/bellRoutes.js";
 
 import { initBellSocket } from "./socket/bellSocket.js";
 
+import adminMisRoutes from "./routes/adminMisRoutes.js";
+
 const app = express();
 const httpServer = http.createServer(app);
 
@@ -67,6 +69,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminEmployeeRoutes);
 app.use("/api/employee", employeeRoutes);
 app.use("/api/bell", bellRoutes);
+app.use("/api/admin/mis", adminMisRoutes);
 
 // Health Check
 app.get("/api/health", (req, res) => {
