@@ -3,12 +3,20 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
+// Optional reference for emit helpers
+let ioRef = null;
+
 export function initHrmSocket(io) {
+  ioRef = io; // store io reference if we want backend emits later
+
+  // Create namespace
   const hrm = io.of("/hrm");
 
   console.log("💬 HRM namespace ready");
 
-  // Authenticate
+  // ============================
+  // AUTH MIDDLEWARE
+  // ============================
   hrm.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
@@ -21,19 +29,31 @@ export function initHrmSocket(io) {
 
       socket.user = user;
       next();
-    } catch {
+    } catch (err) {
+      console.log("❌ HRM Auth Error:", err.message);
       next(new Error("AUTH_FAILED"));
     }
   });
 
+  // ============================
+  // CONNECTION
+  // ============================
   hrm.on("connection", (socket) => {
     const userId = socket.user._id.toString();
     socket.join(userId);
 
-    console.log("🔗 HRM connected:", socket.user.email);
+    console.log(`🔗 HRM Connected → ${socket.user.email}`);
 
     socket.on("disconnect", () => {
-      console.log("❌ HRM disconnected:", socket.user.email);
+      console.log(`❌ HRM Disconnected → ${socket.user.email}`);
     });
   });
 }
+
+/* =====================================================
+   OPTIONAL EMIT HELPERS (use later if HRM needs pushes)
+===================================================== */
+export const emitHrmToUser = (userId, event, payload) => {
+  if (!ioRef) return;
+  ioRef.of("/hrm").to(userId.toString()).emit(event, payload);
+};

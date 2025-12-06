@@ -3,7 +3,11 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
+let ioRef = null;
+
 export function initBellSocket(io) {
+  ioRef = io; // store reference for emit helpers
+
   const bell = io.of("/bell");
 
   console.log("🔌 Bell namespace ready");
@@ -46,3 +50,16 @@ export function initBellSocket(io) {
     });
   });
 }
+
+/* =====================================================
+   Emit Helpers for Controllers
+===================================================== */
+export const emitBellToUser = (userId, payload) => {
+  if (!ioRef) return;
+  ioRef.of("/bell").to(userId.toString()).emit("bell:new", payload);
+};
+
+export const emitBellStoppedToUser = (userId, payload) => {
+  if (!ioRef) return;
+  ioRef.of("/bell").to(userId.toString()).emit("bell:stopped", payload);
+};
