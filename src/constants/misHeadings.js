@@ -1,9 +1,12 @@
 // C:\NexPulse\backend\src\constants\misHeadings.js
 
-// Master MIS headings – EXACTLY matching your master sheet
-// (Order is preserved; duplicates are removed)
+import { sanitizeHeading } from "../utils/misUtils.js";
 
-export const MIS_MASTER_HEADINGS = [
+/**
+ * ORIGINAL headings exactly from master sheet
+ * (124 headings)
+ */
+export const RAW_MIS_HEADINGS = [
   "Sr No.",
   "Scheme/Program/Model",
   "Sub Scheme",
@@ -127,5 +130,13 @@ export const MIS_MASTER_HEADINGS = [
   "Uploaded Date",
   "SDMIS Portal",
   "Audit link",
-  "Document Status",
+  "Document Status"
 ];
+
+/**
+ * SANITIZED headings to store inside MongoDB Map safely
+ * (removes dots, spaces, /, (), etc.)
+ */
+export const MIS_MASTER_HEADINGS = RAW_MIS_HEADINGS.map(h =>
+  sanitizeHeading(h)
+);

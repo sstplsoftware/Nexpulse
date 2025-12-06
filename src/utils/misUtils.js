@@ -1,147 +1,100 @@
 // C:\NexPulse\backend\src\utils\misUtils.js
 
-import { MIS_MASTER_HEADINGS } from "../constants/misHeadings.js";
+import { RAW_MIS_HEADINGS, MIS_MASTER_HEADINGS } from "../constants/misHeadings.js";
 
 /**
- * Normalize a heading string to be more forgiving across Excel variants.
- * - lowercases
- * - trims
- * - collapses spaces
- * - removes non-alphanumeric characters
- *
- * So:
- *  "Sector /SSC Name" and "Sector / SSC  Name"
- * both become "sectorsscname"
+ * Sanitize heading so MongoDB map can accept it
+ * Removes ".", "(", ")", "/", spaces etc.
  */
-function normalizeHeading(str = "") {
-  return str
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, " ")
-    .replace(/[^\w]+/g, "");
+export function sanitizeHeading(heading = "") {
+  return heading
+    .replace(/\./g, "")       // remove dots
+    .replace(/\(/g, "")       // remove (
+    .replace(/\)/g, "")       // remove )
+    .replace(/\//g, "_")      // replace /
+    .replace(/\s+/g, "_")     // convert spaces -> _
+    .replace(/__+/g, "_")     // avoid double _
+    .trim();
 }
 
 /**
- * Build a single rowData Map from one Excel JSON row.
- *
- * - For every MIS_MASTER_HEADINGS item, ensures a key in Map.
- * - If Excel has that column → use value (trimmed).
- * - If Excel missing it → store "NA".
- * - Extra Excel columns are ignored.
- *
- * @param {Object} rawRow - row from XLSX.utils.sheet_to_json
- * @returns {Map<string, string>}
+ * Normalize for matching Excel column names
+ */
+function normalizeHeading(str = "") {
+  return sanitizeHeading(str).toLowerCase();
+}
+
+/**
+ * Converts an Excel row → Map(sanitizedHeading → value)
  */
 export function buildRowDataFromExcelRow(rawRow = {}) {
   const rowMap = new Map();
 
-  // 1) Build a quick lookup: normalized heading → canonical heading
-  const canonicalMap = {};
-  MIS_MASTER_HEADINGS.forEach((h) => {
-    const norm = normalizeHeading(h);
-    if (!canonicalMap[norm]) {
-      canonicalMap[norm] = h;
-    }
+  // Build lookup: normalized → sanitized
+  const lookup = {};
+  RAW_MIS_HEADINGS.forEach(h => {
+    lookup[normalizeHeading(h)] = sanitizeHeading(h);
   });
 
-  // 2) First, map all values we find in Excel row
-  for (const [excelKey, rawVal] of Object.entries(rawRow)) {
-    if (!excelKey) continue;
+  // Map Excel → sanitized keys
+  for (const [key, rawVal] of Object.entries(rawRow)) {
+    if (!key) continue;
 
-    const norm = normalizeHeading(excelKey);
-    const canonicalHeading = canonicalMap[norm];
+    const norm = normalizeHeading(key);
+    const sanitized = lookup[norm];
 
-    if (!canonicalHeading) {
-      // Excel column that is not part of MIS_MASTER_HEADINGS → ignore
-      continue;
-    }
+    if (!sanitized) continue; // ignore unknown columns
 
     const value =
       rawVal === undefined || rawVal === null || rawVal === ""
         ? "NA"
         : String(rawVal).trim();
 
-    rowMap.set(canonicalHeading, value);
+    rowMap.set(sanitized, value);
   }
 
-  // 3) Ensure *all* master headings exist (fill missing ones as "NA")
-  MIS_MASTER_HEADINGS.forEach((h) => {
-    if (!rowMap.has(h)) {
-      rowMap.set(h, "NA");
-    }
+  // Ensure all master headings exist
+  MIS_MASTER_HEADINGS.forEach(h => {
+    if (!rowMap.has(h)) rowMap.set(h, "NA");
   });
 
   return rowMap;
 }
 
 /**
- * Helper: safely read value from either Map or plain object.
+ * Read value from Map or object
  */
-function getSourceValue(source, heading) {
+function getValue(source, key) {
   if (!source) return "";
-
-  if (source instanceof Map) {
-    return source.get(heading) || "";
-  }
-
-  // plain object case
-  return source[heading] || "";
+  return source instanceof Map ? source.get(key) || "" : source[key] || "";
 }
 
 /**
- * Extracts filter-able fields from rowData.
- *
- * It supports:
- *  - rowData as Map<string, string>
- *  - rowData as plain object { heading: value, ... }
- *
- * Output fields stored directly in MisRecord:
- *  - batchId
- *  - schemeProgramModel
- *  - sectorSSCName
- *  - assessorArId
- *  - batchStartDate
- *  - batchEndDate
- *  - assessorName
- *  - assessmentStatus
- *  - resultStatus
+ * Extract DB filter fields
  */
 export function extractFilterFields(rowData) {
-  // Map headings → filter keys
-  const fieldMap = {
-    "Batch Id": "batchId",
-    "Scheme/Program/Model": "schemeProgramModel",
-    "Sector /SSC Name": "sectorSSCName",
-    "Assessor AR ID": "assessorArId",
-    "Batch Start Date": "batchStartDate",
-    "Batch End Date": "batchEndDate",
-    "Assessor Name": "assessorName",
-    "Assessment Status": "assessmentStatus",
-    "Result Status": "resultStatus",
+  const map = {
+    "Batch_Id": "batchId",
+    "SchemeProgramModel": "schemeProgramModel",
+    "Sector_SSC_Name": "sectorSSCName",
+    "Assessor_AR_ID": "assessorArId",
+    "Batch_Start_Date": "batchStartDate",
+    "Batch_End_Date": "batchEndDate",
+    "Assessor_Name": "assessorName",
+    "Assessment_Status": "assessmentStatus",
+    "Result_Status": "resultStatus",
   };
 
   const filters = {};
 
-  for (const [heading, fieldKey] of Object.entries(fieldMap)) {
-    const raw = getSourceValue(rowData, heading);
+  for (const [cleanKey, field] of Object.entries(map)) {
+    const raw = getValue(rowData, cleanKey);
 
-    if (
-      fieldKey === "batchStartDate" ||
-      fieldKey === "batchEndDate"
-    ) {
-      // Try to parse date if present
-      if (raw && raw !== "NA") {
-        const parsed = new Date(raw);
-        filters[fieldKey] = isNaN(parsed.getTime()) ? null : parsed;
-      } else {
-        filters[fieldKey] = null;
-      }
+    if (field.includes("Date")) {
+      const d = new Date(raw);
+      filters[field] = isNaN(d.getTime()) ? null : d;
     } else {
-      filters[fieldKey] =
-        raw === undefined || raw === null || raw === ""
-          ? ""
-          : String(raw).trim();
+      filters[field] = raw || "";
     }
   }
 
@@ -149,21 +102,11 @@ export function extractFilterFields(rowData) {
 }
 
 /**
- * Admin-scope helper
- * - If ADMIN → returns his own _id
- * - If EMPLOYEE → returns createdBy
- * - Otherwise → null
+ * Determine admin scope (ADMIN → self, EMPLOYEE → createdBy)
  */
 export function getAdminScopeFromUser(user) {
   if (!user) return null;
-
-  if (user.role === "ADMIN") {
-    return user._id;
-  }
-
-  if (user.role === "EMPLOYEE") {
-    return user.createdBy || null;
-  }
-
+  if (user.role === "ADMIN") return user._id;
+  if (user.role === "EMPLOYEE") return user.createdBy || null;
   return null;
 }
