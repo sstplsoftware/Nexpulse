@@ -5,12 +5,14 @@ function normalizeHeader(str = "") {
   return String(str)
     .toLowerCase()
     .trim()
-    .replace(/\s+/g, " ")        // collapse spaces
-    .replace(/[().,%]/g, "")     // remove dot, comma, brackets, %
-    .replace(/-/g, " ")          // dash -> space
-    .replace(/\//g, " ")         // slash -> space
-    .replace(/\s+/g, " ");       // collapse again
+    .replace(/_/g, " ")        // <-- FIX: handle underscores
+    .replace(/\s+/g, " ")
+    .replace(/[().,%]/g, "")
+    .replace(/-/g, " ")
+    .replace(/\//g, " ")
+    .replace(/\s+/g, " ");
 }
+
 
 // 2) Map "normalized header" → internal MIS field key
 const HEADER_TO_FIELD = {
