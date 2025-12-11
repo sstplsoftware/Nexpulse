@@ -32,24 +32,40 @@ export const saveSettings = async (req, res) => {
       return res.status(403).json({ message: "Only ADMIN can set attendance settings" });
 
     const adminId = req.user._id;
-    const data = req.body;
+    const { officeSettings, zones } = req.body;
 
-    let settings = await AttendanceSettings.findOne({ adminId });
-
-    if (!settings) {
-      settings = new AttendanceSettings({ adminId, ...data });
-    } else {
-      Object.assign(settings, data);
+    if (!officeSettings) {
+      return res.status(400).json({ message: "officeSettings is required" });
     }
 
-    await settings.save();
+    let settings = await AttendanceSettings.findOne({ adminId });
+    if (!settings) {
+      settings = new AttendanceSettings({ adminId });
+    }
 
+    settings.officeStart = officeSettings.officeStart;
+    settings.officeEnd = officeSettings.officeEnd;
+    settings.halfDayTime = officeSettings.halfDayTime;
+
+    settings.lateMarginMinutes = officeSettings.lateMarginMinutes ?? 15;
+    settings.lateMarginDays = officeSettings.lateMarginDays ?? 0;
+
+    settings.zones = zones?.map((z) => ({
+      name: z.name || "",
+      lat: Number(z.lat) || 0,
+      lng: Number(z.lng) || 0,
+      radius: Number(z.radius) || 100,
+    }));
+
+    await settings.save();
     res.json({ message: "Attendance settings saved", settings });
+
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Failed to save settings" });
+    res.status(500).json({ message: "Failed to save settings", error: err });
   }
 };
+
 
 // ===============================
 // GET SETTINGS (ADMIN OR EMPLOYEE)
