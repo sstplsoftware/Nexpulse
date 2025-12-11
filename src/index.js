@@ -121,7 +121,18 @@ app.get("/", (req, res) => {
 ===================================================== */
 const io = new Server(httpServer, {
   cors: {
-    origin: allowedOrigins,
+    // ❗ Fixed: Socket.IO CORS must be a function when using multiple origins
+    origin: (origin, callback) => {
+      // allow server-to-server / postman / no-origin
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      console.log("❌ Socket.IO CORS BLOCKED:", origin);
+      return callback(new Error("CORS_NOT_ALLOWED"));
+    },
     credentials: true,
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type", "Authorization"],
