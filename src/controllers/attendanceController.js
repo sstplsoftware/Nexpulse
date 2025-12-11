@@ -5,9 +5,32 @@ import { getDistanceMeters } from "../utils/distance.js";
 
 // Format time (HH:mm → Date object)
 function timeToMinutes(t) {
+  if (!t || typeof t !== "string" || !t.includes(":")) return null;
   const [h, m] = t.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
   return h * 60 + m;
 }
+
+function parseTimeStringToMinutes(str) {
+  if (!str) return null;
+
+  const match = str.match(/(\d{1,2}):(\d{2})\s*([APap][Mm])?/);
+  if (!match) return null;
+
+  let hour = parseInt(match[1], 10);
+  const minute = parseInt(match[2], 10);
+  const ampm = match[3] ? match[3].toUpperCase() : null;
+
+  if (ampm) {
+    if (ampm === "PM" && hour !== 12) hour += 12;
+    if (ampm === "AM" && hour === 12) hour = 0;
+  }
+
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+
+  return hour * 60 + minute;
+}
+
 
 // Format current time (HH:MM AM/PM)
 function getNowString() {
@@ -17,6 +40,7 @@ function getNowString() {
     minute: "2-digit",
   });
 }
+
 
 // Format date YYYY-MM-DD
 function getTodayKey() {
@@ -166,7 +190,7 @@ export const markAttendance = async (req, res) => {
       if (record?.clockIn)
         return res.status(400).json({ message: "Already marked IN today" });
 
-      const clockInMin = new Date().getHours() * 60 + new Date().getMinutes();
+      const clockInMin = parseTimeStringToMinutes(now);
       const officeStartMin = timeToMinutes(settings.officeStart);
       const halfDayMin = timeToMinutes(settings.halfDayTime);
 
@@ -204,17 +228,18 @@ if (status === "OUT") {
   record.latOut = lat;
   record.lngOut = lng;
 
-  // Compute total hours using IST
-  const inDate = new Date(`1970-01-01T${record.clockIn}:00+05:30`);
-  const outDate = new Date(`1970-01-01T${now}:00+05:30`);
+  // Compute total hours (no Invalid Date / NaN)
+  const inMin = parseTimeStringToMinutes(record.clockIn);
+  const outMin = parseTimeStringToMinutes(now);
 
-  const diffMs = outDate - inDate;
-  const diffMin = Math.floor(diffMs / 1000 / 60);
-
-  const hrs = Math.floor(diffMin / 60);
-  const min = diffMin % 60;
-
-  record.totalHours = `${hrs}h ${min}m`;
+  if (inMin == null || outMin == null || outMin < inMin) {
+    record.totalHours = "--";
+  } else {
+    const diffMin = outMin - inMin;
+    const hrs = Math.floor(diffMin / 60);
+    const min = diffMin % 60;
+    record.totalHours = `${hrs}h ${min}m`;
+  }
 
   await record.save();
   return res.json({ message: "Clocked Out", time: now, total: record.totalHours });
