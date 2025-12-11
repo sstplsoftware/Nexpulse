@@ -12,6 +12,7 @@ function timeToMinutes(t) {
 // Format current time (HH:MM AM/PM)
 function getNowString() {
   return new Date().toLocaleTimeString("en-IN", {
+    timeZone: "Asia/Kolkata",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -192,31 +193,32 @@ export const markAttendance = async (req, res) => {
     }
 
     // MARK OUT
-    if (status === "OUT") {
-      if (!record?.clockIn)
-        return res.status(400).json({ message: "Cannot mark OUT before IN" });
+if (status === "OUT") {
+  if (!record?.clockIn)
+    return res.status(400).json({ message: "Cannot mark OUT before IN" });
 
-      if (record.clockOut)
-        return res.status(400).json({ message: "Already marked OUT today" });
+  if (record.clockOut)
+    return res.status(400).json({ message: "Already marked OUT today" });
 
-      record.clockOut = now;
-      record.latOut = lat;
-      record.lngOut = lng;
+  record.clockOut = now;
+  record.latOut = lat;
+  record.lngOut = lng;
 
-      // Compute total hours
-      const inDate = new Date(`1970-01-01 ${record.clockIn}`);
-      const outDate = new Date(`1970-01-01 ${now}`);
-      const diffMs = outDate - inDate;
-      const diffMin = Math.floor(diffMs / 60000);
+  // Compute total hours using IST
+  const inDate = new Date(`1970-01-01T${record.clockIn}:00+05:30`);
+  const outDate = new Date(`1970-01-01T${now}:00+05:30`);
 
-      const hrs = Math.floor(diffMin / 60);
-      const min = diffMin % 60;
+  const diffMs = outDate - inDate;
+  const diffMin = Math.floor(diffMs / 1000 / 60);
 
-      record.totalHours = `${hrs}h ${min}m`;
+  const hrs = Math.floor(diffMin / 60);
+  const min = diffMin % 60;
 
-      await record.save();
-      return res.json({ message: "Clocked Out", time: now, total: record.totalHours });
-    }
+  record.totalHours = `${hrs}h ${min}m`;
+
+  await record.save();
+  return res.json({ message: "Clocked Out", time: now, total: record.totalHours });
+}
 
     res.status(400).json({ message: "Invalid status" });
   } catch (err) {
