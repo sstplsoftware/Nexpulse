@@ -1,15 +1,26 @@
 import express from "express";
-import { authMiddleware } from "../middleware/authMiddleware.js";
 import {
+  saveSettings,
+  getSettings,
   markAttendance,
-  manageAttendance,
-  viewAttendance,
+  getTodayAttendance,
 } from "../controllers/attendanceController.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.post("/mark", authMiddleware, markAttendance);
-router.get("/manage", authMiddleware, manageAttendance);
-router.get("/view", authMiddleware, viewAttendance);
+router.use(authMiddleware);
+
+// ADMIN save settings
+router.post("/settings", saveSettings);
+
+// ADMIN or EMPLOYEE get settings
+router.get("/settings", getSettings);
+
+// EMPLOYEE get today's attendance
+router.get("/today", getTodayAttendance);
+
+// EMPLOYEE mark IN/OUT
+router.post("/mark", markAttendance);
 
 export default router;

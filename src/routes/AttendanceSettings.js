@@ -1,0 +1,25 @@
+import mongoose from "mongoose";
+
+const zoneSchema = new mongoose.Schema({
+  name: { type: String, default: "" },
+  lat: { type: Number, required: true },
+  lng: { type: Number, required: true },
+  radius: { type: Number, default: 100 }, // in meters
+});
+
+const attendanceSettingsSchema = new mongoose.Schema(
+  {
+    adminId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+
+    officeStart: { type: String, required: true }, // "09:00"
+    officeEnd: { type: String, required: true },   // "17:30"
+    lateMarginMinutes: { type: Number, default: 15 },
+    lateMarginDays: { type: Number, default: 0 },
+    halfDayTime: { type: String, required: true }, // "12:30"
+
+    zones: { type: [zoneSchema], default: [] },
+  },
+  { timestamps: true }
+);
+
+export default mongoose.model("AttendanceSettings", attendanceSettingsSchema);

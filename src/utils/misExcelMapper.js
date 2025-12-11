@@ -99,7 +99,7 @@ const HEADER_TO_FIELD = {
   "result remarks": "resultRemarks",
 
   "date of result upload on sidh": "dateOfResultUploadOnSidh",
-
+ 
   "council source": "councilSource",
   "batch received month": "batchReceivedMonth",
   "parent batch id": "parentBatchId",

@@ -24,12 +24,21 @@ export function employeePermission(requiredPermission) {
  * ADMIN → always allowed
  * EMPLOYEE → allowed only if MIS_MANAGE = true
  */
+// ✅ MIS access guard: ADMIN OR EMPLOYEE with MIS_MANAGE
 export function misAccessGuard(req, res, next) {
   try {
-    if (req.user?.role === "ADMIN") return next();
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    // Employee must have MIS_MANAGE permission
-    if (req.user?.role === "EMPLOYEE" && req.user.permissions?.MIS_MANAGE) {
+    // Admin always allowed
+    if (user.role === "ADMIN") {
+      return next();
+    }
+
+    // Employee only if MIS_MANAGE permission
+    if (user.role === "EMPLOYEE" && user.permissions?.MIS_MANAGE) {
       return next();
     }
 

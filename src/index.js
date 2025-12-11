@@ -27,10 +27,12 @@ import adminEmployeeRoutes from "./routes/adminEmployeeRoutes.js";
 import employeeRoutes from "./routes/employeeRoutes.js";
 import bellRoutes from "./routes/bellRoutes.js";
 import adminMisRoutes from "./routes/adminMisRoutes.js";
-
+import attendanceRoutes from "./routes/attendanceRoutes.js";
 // Socket Systems
 import { initBellSocket } from "./socket/bellSocket.js";
 import { initHrmSocket } from "./socket/hrmSocket.js";
+
+import misRoutes from "./routes/misRoutes.js";
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -98,7 +100,8 @@ app.use("/api/admin", adminEmployeeRoutes);
 app.use("/api/admin/mis", adminMisRoutes);
 app.use("/api/employee", employeeRoutes);
 app.use("/api/bell", bellRoutes);
-
+app.use("/api/mis", misRoutes);
+app.use("/api/attendance", attendanceRoutes);
 /* =====================================================
    HEALTH CHECK
 ===================================================== */
