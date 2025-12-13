@@ -4,31 +4,31 @@ import {
   getSettings,
   markAttendance,
   getTodayAttendance,
-  getManageAttendance,
-  getAttendanceEmployees,
+
+  getManageAttendanceAllEmployees,
+  getManageEmployeesAll,
   updateAttendance,
   deleteAttendance,
 } from "../controllers/attendanceController.js";
+
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
-
 router.use(authMiddleware);
 
-// ADMIN save settings
+// SETTINGS
 router.post("/settings", saveSettings);
-
-// ADMIN or EMPLOYEE get settings
 router.get("/settings", getSettings);
 
-// EMPLOYEE get today's attendance
+// EMPLOYEE
 router.get("/today", getTodayAttendance);
-
-// EMPLOYEE mark IN/OUT
 router.post("/mark", markAttendance);
 
-router.get("/manage", getManageAttendance);
-router.get("/manage/employees", getAttendanceEmployees);
+// MANAGE (ADMIN + permitted EMPLOYEE)
+router.get("/manage", getManageAttendanceAllEmployees);
+router.get("/manage/employees", getManageEmployeesAll);
+
+// ADMIN ONLY
 router.put("/manage/:id", updateAttendance);
 router.delete("/manage/:id", deleteAttendance);
 
