@@ -257,59 +257,79 @@ if (status === "OUT") {
 // ===============================
 export const getManageAttendance = async (req, res) => {
   try {
-    if (req.user.role !== "ADMIN")
-      return res.status(403).json({ message: "ADMIN only" });
+    const adminId =
+      req.user.role === "EMPLOYEE"
+        ? req.user.createdBy
+        : req.user._id;
 
-    const adminId = req.user._id;
-    const { employeeId, month } = req.query;
-
-    const query = { adminId };
-
-    if (employeeId) query.employeeId = employeeId;
-
-    if (month) {
-      // month format: YYYY-MM
-      query.date = { $regex: `^${month}` };
-    }
-
-    const records = await Attendance.find(query)
-      .populate("employeeId", "profile.name employeeId")
+    const records = await Attendance.find({ adminId })
+      .populate({
+        path: "employeeId",
+        select: "profile.name employeeId",
+      })
       .sort({ date: -1 });
 
-    res.json(records);
+    res.json(
+      records.map((r) => ({
+        _id: r._id,
+        employeeName: r.employeeId?.profile?.name,
+        employeeCode: r.employeeId?.employeeId,
+        date: r.date,
+        clockIn: r.clockIn,
+        clockOut: r.clockOut,
+        totalHours: r.totalHours,
+        status: r.status,
+      }))
+    );
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Failed to load attendance list" });
+    res.status(500).json({ message: "Failed to load attendance records" });
   }
 };
+
 // ===============================
 // ADMIN: EMPLOYEES WHO MARKED ATTENDANCE
 // ===============================
 export const getAttendanceEmployees = async (req, res) => {
   try {
-    if (req.user.role !== "ADMIN")
-      return res.status(403).json({ message: "ADMIN only" });
+    const adminId =
+      req.user.role === "EMPLOYEE"
+        ? req.user.createdBy
+        : req.user._id;
 
-    const adminId = req.user._id;
-
+    // get unique employeeIds from attendance
     const employees = await Attendance.aggregate([
       { $match: { adminId } },
-      { $group: { _id: "$employeeId" } },
+      {
+        $group: {
+          _id: "$employeeId",
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: "$user" },
+      {
+        $project: {
+          _id: "$user._id",
+          name: "$user.profile.name",
+          employeeId: "$user.employeeId",
+        },
+      },
     ]);
 
-    const ids = employees.map(e => e._id);
-
-    const users = await User.find(
-      { _id: { $in: ids } },
-      { "profile.name": 1, employeeId: 1 }
-    );
-
-    res.json(users);
+    res.json(employees);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Failed to load employees" });
+    res.status(500).json({ message: "Failed to load attendance employees" });
   }
 };
+
 // ===============================
 // ADMIN: EDIT ATTENDANCE
 // ===============================
