@@ -4,6 +4,10 @@ import {
   getSettings,
   markAttendance,
   getTodayAttendance,
+  getManageAttendance,
+  getAttendanceEmployees,
+  updateAttendance,
+  deleteAttendance,
 } from "../controllers/attendanceController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
@@ -22,5 +26,10 @@ router.get("/today", getTodayAttendance);
 
 // EMPLOYEE mark IN/OUT
 router.post("/mark", markAttendance);
+
+router.get("/manage", getManageAttendance);
+router.get("/manage/employees", getAttendanceEmployees);
+router.put("/manage/:id", updateAttendance);
+router.delete("/manage/:id", deleteAttendance);
 
 export default router;

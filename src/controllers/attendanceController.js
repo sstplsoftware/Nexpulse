@@ -251,3 +251,112 @@ if (status === "OUT") {
     res.status(500).json({ message: "Failed to mark attendance" });
   }
 };
+
+// ===============================
+// ADMIN: GET ATTENDANCE MANAGE LIST
+// ===============================
+export const getManageAttendance = async (req, res) => {
+  try {
+    if (req.user.role !== "ADMIN")
+      return res.status(403).json({ message: "ADMIN only" });
+
+    const adminId = req.user._id;
+    const { employeeId, month } = req.query;
+
+    const query = { adminId };
+
+    if (employeeId) query.employeeId = employeeId;
+
+    if (month) {
+      // month format: YYYY-MM
+      query.date = { $regex: `^${month}` };
+    }
+
+    const records = await Attendance.find(query)
+      .populate("employeeId", "profile.name employeeId")
+      .sort({ date: -1 });
+
+    res.json(records);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to load attendance list" });
+  }
+};
+// ===============================
+// ADMIN: EMPLOYEES WHO MARKED ATTENDANCE
+// ===============================
+export const getAttendanceEmployees = async (req, res) => {
+  try {
+    if (req.user.role !== "ADMIN")
+      return res.status(403).json({ message: "ADMIN only" });
+
+    const adminId = req.user._id;
+
+    const employees = await Attendance.aggregate([
+      { $match: { adminId } },
+      { $group: { _id: "$employeeId" } },
+    ]);
+
+    const ids = employees.map(e => e._id);
+
+    const users = await User.find(
+      { _id: { $in: ids } },
+      { "profile.name": 1, employeeId: 1 }
+    );
+
+    res.json(users);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to load employees" });
+  }
+};
+// ===============================
+// ADMIN: EDIT ATTENDANCE
+// ===============================
+export const updateAttendance = async (req, res) => {
+  try {
+    if (req.user.role !== "ADMIN")
+      return res.status(403).json({ message: "ADMIN only" });
+
+    const { id } = req.params;
+    const { clockIn, clockOut, status } = req.body;
+
+    const record = await Attendance.findById(id);
+    if (!record) return res.status(404).json({ message: "Record not found" });
+
+    if (clockIn) record.clockIn = clockIn;
+    if (clockOut) record.clockOut = clockOut;
+    if (status) record.status = status;
+
+    // Recalculate hours safely
+    if (record.clockIn && record.clockOut) {
+      const inMin = parseTimeStringToMinutes(record.clockIn);
+      const outMin = parseTimeStringToMinutes(record.clockOut);
+      if (inMin != null && outMin != null && outMin >= inMin) {
+        const diff = outMin - inMin;
+        record.totalHours = `${Math.floor(diff / 60)}h ${diff % 60}m`;
+      }
+    }
+
+    await record.save();
+    res.json({ message: "Attendance updated", record });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to update attendance" });
+  }
+};
+// ===============================
+// ADMIN: DELETE ATTENDANCE
+// ===============================
+export const deleteAttendance = async (req, res) => {
+  try {
+    if (req.user.role !== "ADMIN")
+      return res.status(403).json({ message: "ADMIN only" });
+
+    await Attendance.findByIdAndDelete(req.params.id);
+    res.json({ message: "Attendance deleted" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to delete attendance" });
+  }
+};
