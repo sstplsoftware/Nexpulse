@@ -317,6 +317,8 @@ export const deleteAttendance = async (req, res) => {
     res.status(500).json({ message: "Failed to delete attendance" });
   }
 };
+
+// =================================================================
 export const getManageEmployeesAll = async (req, res) => {
   try {
     if (!canManageAttendance(req.user)) {
@@ -338,6 +340,7 @@ export const getManageEmployeesAll = async (req, res) => {
     res.status(500).json({ message: "Failed to load employees" });
   }
 };
+//===============================
 export const getManageAttendanceAllEmployees = async (req, res) => {
   try {
     if (!canManageAttendance(req.user)) {

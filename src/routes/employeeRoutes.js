@@ -70,10 +70,7 @@ const router = express.Router();
 // ========================================================
 router.use(authMiddleware);
 
-// ========================================================
-// 2️⃣ EMPLOYEE-ONLY ROUTES
-// ========================================================
-router.use(roleMiddleware("EMPLOYEE"));
+
 
 // PROFILE
 router.get("/profile", getMyProfile);
@@ -91,6 +88,21 @@ router.get(
   "/hrm/document/my",
   employeePermission("UPLOAD_DOCUMENTS"),
   getMyHrmDocuments
+);
+
+// ==========================
+// EMPLOYEE LIST (ADMIN + PERMITTED EMPLOYEE)
+// ==========================
+router.get(
+  "/employees",
+  (req, res, next) => {
+    // ADMIN always allowed
+    if (req.user.role === "ADMIN") return next();
+
+    // EMPLOYEE only with permission
+    return employeePermission("ATTENDANCE_MANAGE")(req, res, next);
+  },
+  getVisibleEmployees
 );
 
 
