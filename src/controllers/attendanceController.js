@@ -422,4 +422,54 @@ export const getManageAttendanceAllEmployees = async (req, res) => {
   }
 };
 
+// ===============================
+// EMPLOYEE: MY ATTENDANCE (MONTH)
+// ===============================
+export const getMyMonthlyAttendance = async (req, res) => {
+  try {
+    if (req.user.role !== "EMPLOYEE") {
+      return res.status(403).json({ message: "EMPLOYEE only" });
+    }
+
+    const employeeId = req.user._id;
+    const adminId = req.user.createdBy;
+    const month = req.query.month || new Date().toISOString().slice(0, 7);
+
+    // get all attendance records for this employee
+    const records = await Attendance.find({
+      employeeId,
+      adminId,
+      date: { $regex: `^${month}` },
+    }).lean();
+
+    // map by date
+    const map = new Map();
+    records.forEach(r => map.set(r.date, r));
+
+    // build full month days
+    const [y, m] = month.split("-").map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+
+    const rows = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = `${month}-${String(d).padStart(2, "0")}`;
+      const a = map.get(date);
+
+      rows.push({
+        _id: a?._id || `${employeeId}-${date}`,
+        employeeId,
+        date,
+        clockIn: a?.clockIn || "--",
+        clockOut: a?.clockOut || "--",
+        totalHours: a?.totalHours || "--",
+        status: a?.status || "Absent",
+      });
+    }
+
+    res.json({ ok: true, month, rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to load my attendance" });
+  }
+};
 

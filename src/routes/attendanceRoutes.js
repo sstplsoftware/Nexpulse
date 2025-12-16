@@ -11,6 +11,7 @@ import {
   getManageEmployeesAll,
   updateAttendance,
   deleteAttendance,
+  getMyMonthlyAttendance,
 } from "../controllers/attendanceController.js";
 import { employeePermission } from "../middleware/permissionMiddleware.js";
 import { PERMISSIONS } from "../constants/permissions.js";
@@ -28,6 +29,7 @@ router.use(authMiddleware);
 router.post("/settings", saveSettings);
 router.get("/settings", getSettings);
 
+router.get("/my", getMyMonthlyAttendance);
 // ===============================
 // EMPLOYEE
 // ===============================
