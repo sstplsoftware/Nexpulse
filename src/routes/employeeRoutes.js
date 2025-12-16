@@ -182,6 +182,10 @@ router.get(
   }
 );
 
+router.get(
+  "/attendance/view",employeePermission("ATTENDANCE_VIEW"),
+  attendanceViewHandler
+);
 
 // ==========================
 // OTHER MODULE ROUTES
