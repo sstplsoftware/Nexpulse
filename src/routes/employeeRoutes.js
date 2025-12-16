@@ -64,7 +64,8 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // PROFILE (employee self)
-router.get("/profile", employeePermission("PROFILE_VIEW"), getMyProfile);
+router.get("/profile", getMyProfile);
+
 
 const upload = multer({ storage: multer.memoryStorage() });
 
