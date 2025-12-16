@@ -2,8 +2,7 @@
 
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
-import { roleMiddleware } from "../middleware/roleMiddleware.js";
-import { employeePermission } from "../middleware/permissionMiddleware.js";
+import { employeePermission, adminOrEmployeePermission } from "../middleware/permissionMiddleware.js";
 import User from "../models/User.js";
 
 import {
@@ -18,11 +17,8 @@ import {
   attendanceViewHandler,
   bellRingHandler,
   generateSalarySlipHandler,
-  uploadDocumentsHandler,
   leaveRequestHandler,
   leaveApprovalHandler,
-  chatWithEmployeeHandler,
-  chatWithAdminHandler,
   getVisibleEmployees,
 } from "../controllers/employeeController.js";
 
@@ -41,7 +37,7 @@ import {
   sendHrmChatMessage,
   getHrmChatHistory,
   getUnreadHrmCount,
-  markHrmChatRead
+  markHrmChatRead,
 } from "../controllers/hrmController.js";
 
 import {
@@ -60,20 +56,16 @@ import {
   updateMisRecordEmployee,
 } from "../controllers/misEmployeeController.js";
 
-
 import { hrmUpload } from "../middleware/uploadMiddleware.js";
 
 const router = express.Router();
 
-// ========================================================
-// 1️⃣ ALWAYS APPLY AUTH — NO ROLE BLOCK
-// ========================================================
+// 🔐 AUTH REQUIRED
 router.use(authMiddleware);
 
+// PROFILE (employee self)
+router.get("/profile", employeePermission("PROFILE_VIEW"), getMyProfile);
 
-
-// PROFILE
-router.get("/profile", getMyProfile);
 const upload = multer({ storage: multer.memoryStorage() });
 
 // DOCUMENTS
@@ -90,27 +82,17 @@ router.get(
   getMyHrmDocuments
 );
 
-// ==========================
-// EMPLOYEE LIST (ADMIN + PERMITTED EMPLOYEE)
-// ==========================
+// ✅ EMPLOYEE DIRECTORY LIST (ADMIN + EMPLOYEE_DIRECTORY)
+// This fixes your bug: don't tie it to ATTENDANCE_MANAGE
 router.get(
   "/employees",
-  (req, res, next) => {
-    // ADMIN always allowed
-    if (req.user.role === "ADMIN") return next();
-
-    // EMPLOYEE only with permission
-    return employeePermission("ATTENDANCE_MANAGE")(req, res, next);
-  },
+  adminOrEmployeePermission("EMPLOYEE_DIRECTORY"),
   getVisibleEmployees
 );
-
 
 // ==========================
 // MIS MODULE (Employee)
 // ==========================
-
-// Upload MIS via Excel
 router.post(
   "/mis/upload",
   employeePermission("MIS_MANAGE"),
@@ -118,66 +100,58 @@ router.post(
   uploadMisExcelEmployee
 );
 
-// List MIS records
 router.get(
   "/mis/records",
-  employeePermission("MIS_MANAGE"), // or MIS_VIEW if you want separate
+  employeePermission("MIS_MANAGE"),
   listMisRecordsEmployee
 );
 
-// Get single MIS record
 router.get(
   "/mis/records/:id",
   employeePermission("MIS_MANAGE"),
   getMisRecordEmployee
 );
 
-// Update MIS record
 router.patch(
   "/mis/records/:id",
   employeePermission("MIS_MANAGE"),
   updateMisRecordEmployee
 );
 
-// ========================================================
-// 3️⃣ HRM CHAT (ADMIN + EMPLOYEE SUPPORT)
-// ========================================================
-
-// Send chat
+// ==========================
+// HRM CHAT
+// ==========================
 router.post(
   "/hrm/chat/send",
   (req, res, next) => {
-    if (req.user.role === "ADMIN") return next();
+    if (req.user.role === "ADMIN" || req.user.role === "SUPER_ADMIN") return next();
     return employeePermission("CHAT_EMPLOYEE")(req, res, next);
   },
   sendHrmChatMessage
 );
 
-// History
 router.get(
   "/hrm/chat/history",
   (req, res, next) => {
-    if (req.user.role === "ADMIN") return next();
+    if (req.user.role === "ADMIN" || req.user.role === "SUPER_ADMIN") return next();
     return employeePermission("CHAT_EMPLOYEE")(req, res, next);
   },
   getHrmChatHistory
 );
 
-// Unread count
 router.get(
   "/hrm/chat/unread",
   (req, res, next) => {
-    if (req.user.role === "ADMIN") return next();
+    if (req.user.role === "ADMIN" || req.user.role === "SUPER_ADMIN") return next();
     return employeePermission("CHAT_EMPLOYEE")(req, res, next);
   },
   getUnreadHrmCount
 );
 
-// Read
 router.post(
   "/hrm/chat/mark-read",
   (req, res, next) => {
-    if (req.user.role === "ADMIN") return next();
+    if (req.user.role === "ADMIN" || req.user.role === "SUPER_ADMIN") return next();
     return employeePermission("CHAT_EMPLOYEE")(req, res, next);
   },
   markHrmChatRead
@@ -187,7 +161,7 @@ router.post(
 router.get(
   "/chat/employees",
   (req, res, next) => {
-    if (req.user.role === "ADMIN") return next();
+    if (req.user.role === "ADMIN" || req.user.role === "SUPER_ADMIN") return next();
     return employeePermission("CHAT_EMPLOYEE")(req, res, next);
   },
   async (req, res) => {
@@ -208,25 +182,20 @@ router.get(
   }
 );
 
-// ========================================================
-// OTHER EMPLOYEE MODULE ROUTES (NO TOUCH)
-// ========================================================
+
+// ==========================
+// OTHER MODULE ROUTES
+// ==========================
 router.post("/task-update", employeePermission("TASK_UPDATE"), taskUpdateHandler);
-
 router.post("/mis-manage", employeePermission("MIS_MANAGE"), misManageHandler);
-
 router.get("/tasks/view", employeePermission("TASK_VIEW"), getAllTasksForViewHandler);
 
 router.post("/attendance/mark", employeePermission("ATTENDANCE_MARK"), attendanceMarkHandler);
-
 router.post("/attendance/manage", employeePermission("ATTENDANCE_MANAGE"), attendanceManageHandler);
-
 router.get("/attendance/view", employeePermission("ATTENDANCE_VIEW"), attendanceViewHandler);
 
 router.get("/salary/view", employeePermission("SALARY_VIEW"), salaryViewHandler);
-
 router.post("/salary/manage", employeePermission("SALARY_MANAGE"), salaryManageHandler);
-
 router.post("/salary/generate-slip", employeePermission("GEN_SALARY_SLIP"), generateSalarySlipHandler);
 
 router.post("/holidays/mark", employeePermission("HOLIDAYS_MARK"), holidaysMarkHandler);
@@ -234,7 +203,6 @@ router.post("/holidays/mark", employeePermission("HOLIDAYS_MARK"), holidaysMarkH
 router.post("/bell-ring", employeePermission("BELL_RING"), bellRingHandler);
 
 router.post("/leave/request", employeePermission("LEAVE_REQUEST"), leaveRequestHandler);
-
 router.post("/leave/approval", employeePermission("LEAVE_APPROVAL"), leaveApprovalHandler);
 
 // TASK CRUD
@@ -250,16 +218,14 @@ router.get("/assignable/employees", employeePermission("TASK_ASSIGN"), getAssign
 router.post(
   "/assigned/create",
   (req, res, next) => {
-    if (req.user.role === "ADMIN") return next();
+    if (req.user.role === "ADMIN" || req.user.role === "SUPER_ADMIN") return next();
     return employeePermission("TASK_ASSIGN")(req, res, next);
   },
   assignTaskToEmployee
 );
 
 router.get("/assigned/outbox", employeePermission("TASK_ASSIGN"), getTasksIAssigned);
-
 router.get("/assigned/inbox", employeePermission("TASK_INBOX"), getMyAssignedTasks);
-
 router.patch("/assigned/:taskId/respond", employeePermission("TASK_INBOX"), respondToAssignedTask);
 
 export default router;

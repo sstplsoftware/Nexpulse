@@ -350,7 +350,7 @@ export const getManageAttendanceAllEmployees = async (req, res) => {
     const adminId = resolveAdminId(req.user);
     const month = req.query.month || new Date().toISOString().slice(0, 7);
 
-    // 1️⃣ Fetch all employees of admin
+    // 1️⃣ Fetch all employees of this admin
     const employees = await User.find({
       role: "EMPLOYEE",
       createdBy: adminId,
@@ -358,19 +358,23 @@ export const getManageAttendanceAllEmployees = async (req, res) => {
       .select("_id profile.name employeeId department")
       .lean();
 
-    // 2️⃣ Fetch attendance for that month
+    // 2️⃣ Fetch attendance for that month (NO populate needed for map)
     const attendance = await Attendance.find({
       adminId,
       date: { $regex: `^${month}` },
     })
-      .populate("employeeId", "profile.name employeeId department")
       .lean();
 
-    // 3️⃣ Map attendance by employeeId + date
+    // 3️⃣ Map attendance by employeeId + date (SAFE for populated/non-populated)
     const attendanceMap = new Map();
-    attendance.forEach((a) => {
-      attendanceMap.set(`${a.employeeId._id}-${a.date}`, a);
-    });
+    for (const a of attendance) {
+      const empId =
+        typeof a.employeeId === "object" && a.employeeId?._id
+          ? String(a.employeeId._id)
+          : String(a.employeeId);
+
+      attendanceMap.set(`${empId}-${a.date}`, a);
+    }
 
     // 4️⃣ Build full month days
     const [y, m] = month.split("-").map(Number);
@@ -380,14 +384,24 @@ export const getManageAttendanceAllEmployees = async (req, res) => {
 
     // 5️⃣ CREATE ROWS FOR EVERY EMPLOYEE × EVERY DAY
     for (const emp of employees) {
+      const empId = String(emp._id);
+
       for (let d = 1; d <= daysInMonth; d++) {
         const date = `${month}-${String(d).padStart(2, "0")}`;
-        const key = `${emp._id}-${date}`;
+        const key = `${empId}-${date}`;
         const a = attendanceMap.get(key);
 
         rows.push({
-          _id: a?._id || `${emp._id}-${date}`,
-          employeeId: a?.employeeId || emp,   // ✅ ALWAYS employeeId
+          _id: a?._id || `${empId}-${date}`,
+
+          // ✅ ALWAYS send employeeId object (for frontend: employeeId.profile.name)
+          employeeId: {
+            _id: emp._id,
+            profile: emp.profile,
+            employeeId: emp.employeeId,
+            department: emp.department,
+          },
+
           date,
           clockIn: a?.clockIn || "--",
           clockOut: a?.clockOut || "--",
@@ -403,8 +417,9 @@ export const getManageAttendanceAllEmployees = async (req, res) => {
       rows,
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to load attendance" });
+    console.error("getManageAttendanceAllEmployees error:", err);
+    return res.status(500).json({ message: "Failed to load attendance" });
   }
 };
+
 

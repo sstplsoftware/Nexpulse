@@ -3,8 +3,18 @@
 export function employeePermission(requiredPermission) {
   return (req, res, next) => {
     try {
-      const perms = req.user?.permissions || {};
+      const user = req.user;
 
+      if (!user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // ✅ Admin/Super Admin bypass (important)
+      if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") {
+        return next();
+      }
+
+      const perms = user.permissions || {};
       if (!perms[requiredPermission]) {
         return res.status(403).json({
           message: "You do not have permission to access this module.",
@@ -19,12 +29,42 @@ export function employeePermission(requiredPermission) {
   };
 }
 
+/**
+ * ✅ Allow ADMIN/SUPER_ADMIN always
+ * ✅ Allow EMPLOYEE only if permission=true
+ */
+export function adminOrEmployeePermission(requiredPermission) {
+  return (req, res, next) => {
+    try {
+      const user = req.user;
+
+      if (!user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") {
+        return next();
+      }
+
+      if (user.role === "EMPLOYEE" && user.permissions?.[requiredPermission]) {
+        return next();
+      }
+
+      return res.status(403).json({
+        message: "You do not have permission to access this module.",
+      });
+    } catch (err) {
+      console.error("adminOrEmployeePermission error:", err.message);
+      return res.status(500).json({ message: "Server error" });
+    }
+  };
+}
+
 /*
  * MIS Access Guard:
  * ADMIN → always allowed
  * EMPLOYEE → allowed only if MIS_MANAGE = true
  */
-// ✅ MIS access guard: ADMIN OR EMPLOYEE with MIS_MANAGE
 export function misAccessGuard(req, res, next) {
   try {
     const user = req.user;
@@ -32,12 +72,10 @@ export function misAccessGuard(req, res, next) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // Admin always allowed
-    if (user.role === "ADMIN") {
+    if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") {
       return next();
     }
 
-    // Employee only if MIS_MANAGE permission
     if (user.role === "EMPLOYEE" && user.permissions?.MIS_MANAGE) {
       return next();
     }
