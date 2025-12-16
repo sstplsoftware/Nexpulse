@@ -350,42 +350,45 @@ export const getManageAttendanceAllEmployees = async (req, res) => {
     const adminId = resolveAdminId(req.user);
     const month = req.query.month || new Date().toISOString().slice(0, 7);
 
+    // 1️⃣ Fetch all employees of admin
     const employees = await User.find({
       role: "EMPLOYEE",
       createdBy: adminId,
     })
-      .select("profile.name employeeId department")
+      .select("_id profile.name employeeId department")
       .lean();
 
+    // 2️⃣ Fetch attendance for that month
     const attendance = await Attendance.find({
       adminId,
       date: { $regex: `^${month}` },
-    }).lean();
+    })
+      .populate("employeeId", "profile.name employeeId department")
+      .lean();
 
-    const map = new Map();
-    attendance.forEach(a => {
-      map.set(`${a.employeeId}-${a.date}`, a);
+    // 3️⃣ Map attendance by employeeId + date
+    const attendanceMap = new Map();
+    attendance.forEach((a) => {
+      attendanceMap.set(`${a.employeeId._id}-${a.date}`, a);
     });
 
-    const daysInMonth = (() => {
-      const [y, m] = month.split("-").map(Number);
-      const last = new Date(y, m, 0).getDate();
-      return Array.from({ length: last }, (_, i) =>
-        `${month}-${String(i + 1).padStart(2, "0")}`
-      );
-    })();
+    // 4️⃣ Build full month days
+    const [y, m] = month.split("-").map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
 
     const rows = [];
 
+    // 5️⃣ CREATE ROWS FOR EVERY EMPLOYEE × EVERY DAY
     for (const emp of employees) {
-      for (const d of daysInMonth) {
-        const key = `${emp._id}-${d}`;
-        const a = map.get(key);
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = `${month}-${String(d).padStart(2, "0")}`;
+        const key = `${emp._id}-${date}`;
+        const a = attendanceMap.get(key);
 
         rows.push({
-          _id: a?._id || `${emp._id}-${d}`,
-          employee: emp,
-          date: d,
+          _id: a?._id || `${emp._id}-${date}`,
+          employeeId: a?.employeeId || emp,   // ✅ ALWAYS employeeId
+          date,
           clockIn: a?.clockIn || "--",
           clockOut: a?.clockOut || "--",
           totalHours: a?.totalHours || "--",
@@ -394,9 +397,14 @@ export const getManageAttendanceAllEmployees = async (req, res) => {
       }
     }
 
-    res.json({ ok: true, month, rows });
+    return res.json({
+      ok: true,
+      month,
+      rows,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to load attendance" });
   }
 };
+
