@@ -12,6 +12,8 @@ import {
   updateAttendance,
   deleteAttendance,
 } from "../controllers/attendanceController.js";
+import { employeePermission } from "../middleware/permissionMiddleware.js";
+import { PERMISSIONS } from "../constants/permissions.js";
 
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
@@ -29,13 +31,27 @@ router.get("/settings", getSettings);
 // ===============================
 // EMPLOYEE
 // ===============================
-router.get("/today", getTodayAttendance);
-router.post("/mark", markAttendance);
 
-// ===============================
-// MANAGE (ADMIN + EMPLOYEE WITH PERMISSION)
-// ===============================
-router.get("/manage", getManageAttendanceAllEmployees);
+// EMPLOYEE SELF
+router.get(
+  "/today",
+  employeePermission(PERMISSIONS.ATTENDANCE_VIEW),
+  getTodayAttendance
+);
+
+router.post(
+  "/mark",
+  employeePermission(PERMISSIONS.ATTENDANCE_MARK),
+  markAttendance
+);
+
+// ADMIN / MANAGER
+router.get(
+  "/manage",
+  employeePermission(PERMISSIONS.ATTENDANCE_MANAGE),
+  getManageAttendanceAllEmployees
+);
+
 router.get("/manage/employees", getManageEmployeesAll);
 
 // ✅ ALIAS (IMPORTANT FIX)

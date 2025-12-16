@@ -2,6 +2,7 @@
 
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
+import { PERMISSIONS } from "../constants/permissions.js";
 import { employeePermission, adminOrEmployeePermission } from "../middleware/permissionMiddleware.js";
 import User from "../models/User.js";
 
@@ -85,12 +86,12 @@ router.get(
 
 // ✅ EMPLOYEE DIRECTORY LIST (ADMIN + EMPLOYEE_DIRECTORY)
 // This fixes your bug: don't tie it to ATTENDANCE_MANAGE
+
 router.get(
   "/employees",
-  adminOrEmployeePermission("EMPLOYEE_DIRECTORY"),
+  adminOrEmployeePermission(PERMISSIONS.EMPLOYEE_DIRECTORY),
   getVisibleEmployees
 );
-
 // ==========================
 // MIS MODULE (Employee)
 // ==========================
