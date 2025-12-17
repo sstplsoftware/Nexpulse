@@ -42,8 +42,8 @@ const httpServer = http.createServer(app);
 ===================================================== */
 export const allowedOrigins = [
   "http://localhost:5173",
-  "https://crm-fft1.onrender.com",
-  "http://crm-fft1.onrender.com",
+  "http://crm-hrx8.onrender.com",
+  "https://crm-hrx8.onrender.com",
   "https://nexpulse.sstpltech.com",
   "https://www.nexpulse.sstpltech.com",
   "http://nexpulse.sstpltech.com",
