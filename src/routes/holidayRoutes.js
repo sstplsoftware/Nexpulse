@@ -3,37 +3,38 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 import { employeePermission } from "../middleware/permissionMiddleware.js";
 import {
   markHoliday,
-  listHolidays,
+  getHolidays,
   updateHoliday,
   deleteHoliday,
 } from "../controllers/holidayController.js";
 
 const router = express.Router();
 
+// 🔐 Auth required
 router.use(authMiddleware);
 
-/* CREATE */
+// CREATE
 router.post(
   "/mark",
   employeePermission("HOLIDAYS_MARK"),
   markHoliday
 );
 
-/* READ */
+// READ  ✅ THIS WAS MISSING
 router.get(
   "/",
-  employeePermission("HOLIDAYS_MARK"),
-  listHolidays
+  employeePermission("HOLIDAYS_VIEW"),
+  getHolidays
 );
 
-/* UPDATE */
+// UPDATE
 router.put(
   "/:id",
   employeePermission("HOLIDAYS_MARK"),
   updateHoliday
 );
 
-/* DELETE */
+// DELETE
 router.delete(
   "/:id",
   employeePermission("HOLIDAYS_MARK"),

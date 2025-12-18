@@ -107,3 +107,17 @@ export async function deleteHoliday(req, res) {
     res.status(500).json({ message: "Server error" });
   }
 }
+export async function getHolidays(req, res) {
+  try {
+    const adminId = req.user.createdBy || req.user._id;
+
+    const holidays = await Holiday.find({ adminId })
+      .sort({ date: 1 })
+      .lean();
+
+    res.json({ ok: true, holidays });
+  } catch (err) {
+    console.error("getHolidays error", err);
+    res.status(500).json({ message: "Server error" });
+  }
+}
