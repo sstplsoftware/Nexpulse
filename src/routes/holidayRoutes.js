@@ -1,15 +1,28 @@
+import express from "express";
+import { authMiddleware } from "../middleware/authMiddleware.js";
+import { employeePermission } from "../middleware/permissionMiddleware.js";
 import { PERMISSIONS } from "../constants/permissions.js";
 
+import {
+  markHoliday,
+  getHolidays,
+  updateHoliday,
+  deleteHoliday,
+} from "../controllers/holidayController.js";
+
+const router = express.Router();
+
+// 🔐 Auth required
 router.use(authMiddleware);
 
-// CREATE
+// CREATE – Admin OR Employee with HOLIDAYS_MARK
 router.post(
   "/mark",
   employeePermission(PERMISSIONS.HOLIDAYS_MARK),
   markHoliday
 );
 
-// READ
+// READ – Admin OR Employee with HOLIDAYS_VIEW
 router.get(
   "/",
   employeePermission(PERMISSIONS.HOLIDAYS_VIEW),
@@ -29,3 +42,5 @@ router.delete(
   employeePermission(PERMISSIONS.HOLIDAYS_MARK),
   deleteHoliday
 );
+
+export default router;
