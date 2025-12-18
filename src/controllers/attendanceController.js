@@ -2,13 +2,29 @@ import AttendanceSettings from "../models/AttendanceSettings.js";
 import Attendance from "../models/Attendance.js";
 import User from "../models/User.js";
 import { getDistanceMeters } from "../utils/distance.js";
+import Holiday from "../models/Holiday.js";
 
-// Format time (HH:mm → Date object)
+// Format time (HH:mm → minutes)
 function timeToMinutes(t) {
   if (!t || typeof t !== "string" || !t.includes(":")) return null;
   const [h, m] = t.split(":").map(Number);
   if (Number.isNaN(h) || Number.isNaN(m)) return null;
   return h * 60 + m;
+}
+
+function isSunday(dateStr) {
+  return new Date(dateStr).getDay() === 0;
+}
+
+async function getHolidayMap(adminId, month) {
+  const holidays = await Holiday.find({
+    adminId,
+    date: { $regex: `^${month}` },
+  }).lean();
+
+  const map = new Map();
+  holidays.forEach((h) => map.set(h.date, h));
+  return map;
 }
 
 function parseTimeStringToMinutes(str) {
@@ -37,12 +53,11 @@ function resolveAdminId(user) {
 
 function canManageAttendance(user) {
   if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") return true;
-  if (user.role === "EMPLOYEE" && user.permissions?.ATTENDANCE_MANAGE) return true;
+  if (user.role === "EMPLOYEE" && user.permissions?.ATTENDANCE_MANAGE)
+    return true;
   return false;
 }
 
-
-// Format current time (HH:MM AM/PM)
 function getNowString() {
   return new Date().toLocaleTimeString("en-IN", {
     timeZone: "Asia/Kolkata",
@@ -51,16 +66,12 @@ function getNowString() {
   });
 }
 
-
-// Format date YYYY-MM-DD
 function getTodayKey() {
   const now = new Date(
     new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
   );
   return now.toISOString().slice(0, 10);
 }
-
-
 // ===============================
 // SAVE ADMIN ATTENDANCE SETTINGS
 // ===============================
@@ -77,14 +88,11 @@ export const saveSettings = async (req, res) => {
     }
 
     let settings = await AttendanceSettings.findOne({ adminId });
-    if (!settings) {
-      settings = new AttendanceSettings({ adminId });
-    }
+    if (!settings) settings = new AttendanceSettings({ adminId });
 
     settings.officeStart = officeSettings.officeStart;
     settings.officeEnd = officeSettings.officeEnd;
     settings.halfDayTime = officeSettings.halfDayTime;
-
     settings.lateMarginMinutes = officeSettings.lateMarginMinutes ?? 15;
     settings.lateMarginDays = officeSettings.lateMarginDays ?? 0;
 
@@ -97,27 +105,19 @@ export const saveSettings = async (req, res) => {
 
     await settings.save();
     res.json({ message: "Attendance settings saved", settings });
-
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Failed to save settings", error: err });
+    res.status(500).json({ message: "Failed to save settings" });
   }
 };
 
-
 // ===============================
-// GET SETTINGS (ADMIN OR EMPLOYEE)
+// GET SETTINGS
 // ===============================
 export const getSettings = async (req, res) => {
   try {
-    let adminId;
-
-    // Employee → use createdBy
-    if (req.user.role === "EMPLOYEE") {
-      adminId = req.user.createdBy;
-    } else {
-      adminId = req.user._id;
-    }
+    const adminId =
+      req.user.role === "EMPLOYEE" ? req.user.createdBy : req.user._id;
 
     const settings = await AttendanceSettings.findOne({ adminId });
 
@@ -132,7 +132,7 @@ export const getSettings = async (req, res) => {
 };
 
 // ===============================
-// GET TODAY SUMMARY
+// GET TODAY SUMMARY ✅ FIXED
 // ===============================
 export const getTodayAttendance = async (req, res) => {
   try {
@@ -142,8 +142,23 @@ export const getTodayAttendance = async (req, res) => {
     const employeeId = req.user._id;
     const adminId = req.user.createdBy;
     const today = getTodayKey();
+    const month = today.slice(0, 7);
 
-    let record = await Attendance.findOne({ employeeId, adminId, date: today });
+    const holidayMap = await getHolidayMap(adminId, month);
+
+    if (isSunday(today)) {
+      return res.status(400).json({
+        message: "Attendance not allowed on Sunday (Week Off)",
+      });
+    }
+
+    if (holidayMap.has(today)) {
+      return res.status(400).json({
+        message: "Attendance not allowed on Holiday",
+      });
+    }
+
+    const record = await Attendance.findOne({ employeeId, adminId, date: today });
 
     if (!record) {
       return res.json({
@@ -161,7 +176,6 @@ export const getTodayAttendance = async (req, res) => {
     res.status(500).json({ message: "Failed to get attendance" });
   }
 };
-
 // ===============================
 // MARK IN / OUT
 // ===============================
@@ -179,9 +193,8 @@ export const markAttendance = async (req, res) => {
     if (!settings)
       return res.status(400).json({ message: "Attendance settings missing" });
 
-    // CHECK GEOFENCE
     let inside = false;
-    for (let z of settings.zones) {
+    for (const z of settings.zones) {
       const d = getDistanceMeters(lat, lng, z.lat, z.lng);
       if (d <= z.radius) inside = true;
     }
@@ -192,13 +205,8 @@ export const markAttendance = async (req, res) => {
     const now = getNowString();
     const today = getTodayKey();
 
-    let record = await Attendance.findOne({
-      employeeId,
-      adminId,
-      date: today,
-    });
+    let record = await Attendance.findOne({ employeeId, adminId, date: today });
 
-    // MARK IN
     if (status === "IN") {
       if (record?.clockIn)
         return res.status(400).json({ message: "Already marked IN today" });
@@ -212,13 +220,8 @@ export const markAttendance = async (req, res) => {
         finalStatus = "Late";
       if (clockInMin > halfDayMin) finalStatus = "Half Day";
 
-      if (!record) {
-        record = new Attendance({
-          employeeId,
-          adminId,
-          date: today,
-        });
-      }
+      if (!record)
+        record = new Attendance({ employeeId, adminId, date: today });
 
       record.clockIn = now;
       record.latIn = lat;
@@ -229,34 +232,34 @@ export const markAttendance = async (req, res) => {
       return res.json({ message: "Clocked In", time: now, status: finalStatus });
     }
 
-    // MARK OUT
-if (status === "OUT") {
-  if (!record?.clockIn)
-    return res.status(400).json({ message: "Cannot mark OUT before IN" });
+    if (status === "OUT") {
+      if (!record?.clockIn)
+        return res.status(400).json({ message: "Cannot mark OUT before IN" });
 
-  if (record.clockOut)
-    return res.status(400).json({ message: "Already marked OUT today" });
+      if (record.clockOut)
+        return res.status(400).json({ message: "Already marked OUT today" });
 
-  record.clockOut = now;
-  record.latOut = lat;
-  record.lngOut = lng;
+      record.clockOut = now;
+      record.latOut = lat;
+      record.lngOut = lng;
 
-  // Compute total hours (no Invalid Date / NaN)
-  const inMin = parseTimeStringToMinutes(record.clockIn);
-  const outMin = parseTimeStringToMinutes(now);
+      const inMin = parseTimeStringToMinutes(record.clockIn);
+      const outMin = parseTimeStringToMinutes(now);
 
-  if (inMin == null || outMin == null || outMin < inMin) {
-    record.totalHours = "--";
-  } else {
-    const diffMin = outMin - inMin;
-    const hrs = Math.floor(diffMin / 60);
-    const min = diffMin % 60;
-    record.totalHours = `${hrs}h ${min}m`;
-  }
+      if (inMin != null && outMin != null && outMin >= inMin) {
+        const diff = outMin - inMin;
+        record.totalHours = `${Math.floor(diff / 60)}h ${diff % 60}m`;
+      } else {
+        record.totalHours = "--";
+      }
 
-  await record.save();
-  return res.json({ message: "Clocked Out", time: now, total: record.totalHours });
-}
+      await record.save();
+      return res.json({
+        message: "Clocked Out",
+        time: now,
+        total: record.totalHours,
+      });
+    }
 
     res.status(400).json({ message: "Invalid status" });
   } catch (err) {
@@ -265,10 +268,8 @@ if (status === "OUT") {
   }
 };
 
-
-
 // ===============================
-// ADMIN: EDIT ATTENDANCE
+// ADMIN: EDIT / DELETE
 // ===============================
 export const updateAttendance = async (req, res) => {
   try {
@@ -281,11 +282,21 @@ export const updateAttendance = async (req, res) => {
     const record = await Attendance.findById(id);
     if (!record) return res.status(404).json({ message: "Record not found" });
 
+    if (isSunday(record.date))
+      return res.status(400).json({ message: "Cannot edit Sunday" });
+
+    const holidayExists = await Holiday.exists({
+      adminId: record.adminId,
+      date: record.date,
+    });
+
+    if (holidayExists)
+      return res.status(400).json({ message: "Cannot edit Holiday" });
+
     if (clockIn) record.clockIn = clockIn;
     if (clockOut) record.clockOut = clockOut;
     if (status) record.status = status;
 
-    // Recalculate hours safely
     if (record.clockIn && record.clockOut) {
       const inMin = parseTimeStringToMinutes(record.clockIn);
       const outMin = parseTimeStringToMinutes(record.clockOut);
@@ -302,9 +313,7 @@ export const updateAttendance = async (req, res) => {
     res.status(500).json({ message: "Failed to update attendance" });
   }
 };
-// ===============================
-// ADMIN: DELETE ATTENDANCE
-// ===============================
+
 export const deleteAttendance = async (req, res) => {
   try {
     if (req.user.role !== "ADMIN")
@@ -317,13 +326,10 @@ export const deleteAttendance = async (req, res) => {
     res.status(500).json({ message: "Failed to delete attendance" });
   }
 };
-
-// =================================================================
 export const getManageEmployeesAll = async (req, res) => {
   try {
-    if (!canManageAttendance(req.user)) {
+    if (!canManageAttendance(req.user))
       return res.status(403).json({ message: "Not allowed" });
-    }
 
     const adminId = resolveAdminId(req.user);
 
@@ -340,121 +346,121 @@ export const getManageEmployeesAll = async (req, res) => {
     res.status(500).json({ message: "Failed to load employees" });
   }
 };
-//===============================
+
 export const getManageAttendanceAllEmployees = async (req, res) => {
   try {
-    if (!canManageAttendance(req.user)) {
+    if (!canManageAttendance(req.user))
       return res.status(403).json({ message: "Not allowed" });
-    }
 
     const adminId = resolveAdminId(req.user);
     const month = req.query.month || new Date().toISOString().slice(0, 7);
 
-    // 1️⃣ Fetch all employees of this admin
     const employees = await User.find({
       role: "EMPLOYEE",
       createdBy: adminId,
-    })
-      .select("_id profile.name employeeId department")
-      .lean();
+    }).lean();
 
-    // 2️⃣ Fetch attendance for that month (NO populate needed for map)
     const attendance = await Attendance.find({
       adminId,
       date: { $regex: `^${month}` },
-    })
-      .lean();
+    }).lean();
 
-    // 3️⃣ Map attendance by employeeId + date (SAFE for populated/non-populated)
     const attendanceMap = new Map();
-    for (const a of attendance) {
-      const empId =
-        typeof a.employeeId === "object" && a.employeeId?._id
-          ? String(a.employeeId._id)
-          : String(a.employeeId);
+    attendance.forEach((a) =>
+      attendanceMap.set(`${a.employeeId}-${a.date}`, a)
+    );
 
-      attendanceMap.set(`${empId}-${a.date}`, a);
-    }
+    const holidayMap = await getHolidayMap(adminId, month);
 
-    // 4️⃣ Build full month days
     const [y, m] = month.split("-").map(Number);
     const daysInMonth = new Date(y, m, 0).getDate();
 
     const rows = [];
 
-    // 5️⃣ CREATE ROWS FOR EVERY EMPLOYEE × EVERY DAY
     for (const emp of employees) {
-      const empId = String(emp._id);
-
       for (let d = 1; d <= daysInMonth; d++) {
         const date = `${month}-${String(d).padStart(2, "0")}`;
-        const key = `${empId}-${date}`;
-        const a = attendanceMap.get(key);
+        const a = attendanceMap.get(`${emp._id}-${date}`);
+
+        let status = "Absent";
+        if (isSunday(date)) status = "WEEK OFF";
+        else if (holidayMap.has(date)) status = "HOLIDAY";
+        else if (a?.status) status = a.status;
 
         rows.push({
-          _id: a?._id || `${empId}-${date}`,
-
-          // ✅ ALWAYS send employeeId object (for frontend: employeeId.profile.name)
-          employeeId: {
-            _id: emp._id,
-            profile: emp.profile,
-            employeeId: emp.employeeId,
-            department: emp.department,
-          },
-
+          _id: a?._id || `${emp._id}-${date}`,
+          employeeId: emp,
           date,
           clockIn: a?.clockIn || "--",
           clockOut: a?.clockOut || "--",
           totalHours: a?.totalHours || "--",
-          status: a?.status || "Absent",
+          status,
         });
       }
     }
 
-    return res.json({
-      ok: true,
-      month,
-      rows,
-    });
+    res.json({ ok: true, month, rows });
   } catch (err) {
-    console.error("getManageAttendanceAllEmployees error:", err);
-    return res.status(500).json({ message: "Failed to load attendance" });
+    console.error(err);
+    res.status(500).json({ message: "Failed to load attendance" });
   }
 };
 
-// ===============================
-// EMPLOYEE: MY ATTENDANCE (MONTH)
-// ===============================
 export const getMyMonthlyAttendance = async (req, res) => {
   try {
-    if (req.user.role !== "EMPLOYEE") {
+    if (req.user.role !== "EMPLOYEE")
       return res.status(403).json({ message: "EMPLOYEE only" });
-    }
 
     const employeeId = req.user._id;
     const adminId = req.user.createdBy;
     const month = req.query.month || new Date().toISOString().slice(0, 7);
 
-    // get all attendance records for this employee
     const records = await Attendance.find({
       employeeId,
       adminId,
       date: { $regex: `^${month}` },
     }).lean();
 
-    // map by date
     const map = new Map();
-    records.forEach(r => map.set(r.date, r));
+    records.forEach((r) => map.set(r.date, r));
 
-    // build full month days
+    const holidayMap = await getHolidayMap(adminId, month);
+
     const [y, m] = month.split("-").map(Number);
     const daysInMonth = new Date(y, m, 0).getDate();
 
     const rows = [];
+
     for (let d = 1; d <= daysInMonth; d++) {
       const date = `${month}-${String(d).padStart(2, "0")}`;
-      const a = map.get(date);
 
+      if (isSunday(date)) {
+        rows.push({
+          _id: `${employeeId}-${date}`,
+          employeeId,
+          date,
+          clockIn: "--",
+          clockOut: "--",
+          totalHours: "--",
+          status: "WEEK OFF",
+        });
+        continue;
+      }
+
+      if (holidayMap.has(date)) {
+        rows.push({
+          _id: `${employeeId}-${date}`,
+          employeeId,
+          date,
+          clockIn: "--",
+          clockOut: "--",
+          totalHours: "--",
+          status: "HOLIDAY",
+        });
+        continue;
+      }
+
+      const a = map.get(date);
       rows.push({
         _id: a?._id || `${employeeId}-${date}`,
         employeeId,
@@ -472,4 +478,3 @@ export const getMyMonthlyAttendance = async (req, res) => {
     res.status(500).json({ message: "Failed to load my attendance" });
   }
 };
-
