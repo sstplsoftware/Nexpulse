@@ -1,11 +1,12 @@
 import Holiday from "../models/Holiday.js";
+import { resolveAdminId } from "../utils/resolveAdminId.js";
 
 /* ==============================
    CREATE HOLIDAY
 ============================== */
 export async function markHoliday(req, res) {
   try {
-    const adminId = req.user.createdBy || req.user._id;
+    const adminId = resolveAdminId(req.user);
     const { holidayName, holidayDate, description } = req.body;
 
     if (!holidayName || !holidayDate) {
@@ -21,35 +22,35 @@ export async function markHoliday(req, res) {
       return res.status(400).json({ message: "Holiday already exists" });
     }
 
-    await Holiday.create({
+    const holiday = await Holiday.create({
       adminId,
       date: holidayDate,
       name: holidayName,
       description,
     });
 
-    res.json({ ok: true });
+    return res.json({ ok: true, holiday });
   } catch (err) {
-    console.error("markHoliday error", err);
-    res.status(500).json({ message: "Server error" });
+    console.error("markHoliday error:", err.message);
+    return res.status(500).json({ message: err.message });
   }
 }
 
 /* ==============================
-   LIST HOLIDAYS
+   GET HOLIDAYS (VIEW)
 ============================== */
-export async function listHolidays(req, res) {
+export async function getHolidays(req, res) {
   try {
-    const adminId = req.user.createdBy || req.user._id;
+    const adminId = resolveAdminId(req.user);
 
     const holidays = await Holiday.find({ adminId })
       .sort({ date: 1 })
       .lean();
 
-    res.json({ ok: true, holidays });
+    return res.json({ ok: true, holidays });
   } catch (err) {
-    console.error("listHolidays error", err);
-    res.status(500).json({ message: "Server error" });
+    console.error("getHolidays error:", err.message);
+    return res.status(500).json({ message: err.message });
   }
 }
 
@@ -58,7 +59,7 @@ export async function listHolidays(req, res) {
 ============================== */
 export async function updateHoliday(req, res) {
   try {
-    const adminId = req.user.createdBy || req.user._id;
+    const adminId = resolveAdminId(req.user);
     const { id } = req.params;
     const { holidayName, holidayDate, description } = req.body;
 
@@ -77,10 +78,10 @@ export async function updateHoliday(req, res) {
 
     await holiday.save();
 
-    res.json({ ok: true });
+    return res.json({ ok: true, holiday });
   } catch (err) {
-    console.error("updateHoliday error", err);
-    res.status(500).json({ message: "Server error" });
+    console.error("updateHoliday error:", err.message);
+    return res.status(500).json({ message: err.message });
   }
 }
 
@@ -89,7 +90,7 @@ export async function updateHoliday(req, res) {
 ============================== */
 export async function deleteHoliday(req, res) {
   try {
-    const adminId = req.user.createdBy || req.user._id;
+    const adminId = resolveAdminId(req.user);
     const { id } = req.params;
 
     const holiday = await Holiday.findOneAndDelete({
@@ -101,23 +102,9 @@ export async function deleteHoliday(req, res) {
       return res.status(404).json({ message: "Holiday not found" });
     }
 
-    res.json({ ok: true });
+    return res.json({ ok: true });
   } catch (err) {
-    console.error("deleteHoliday error", err);
-    res.status(500).json({ message: "Server error" });
-  }
-}
-export async function getHolidays(req, res) {
-  try {
-    const adminId = req.user.createdBy || req.user._id;
-
-    const holidays = await Holiday.find({ adminId })
-      .sort({ date: 1 })
-      .lean();
-
-    res.json({ ok: true, holidays });
-  } catch (err) {
-    console.error("getHolidays error", err);
-    res.status(500).json({ message: "Server error" });
+    console.error("deleteHoliday error:", err.message);
+    return res.status(500).json({ message: err.message });
   }
 }
