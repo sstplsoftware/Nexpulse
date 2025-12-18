@@ -48,6 +48,7 @@ export const allowedOrigins = [
   "https://nexpulse.sstpltech.com",
   "https://www.nexpulse.sstpltech.com",
   "http://nexpulse.sstpltech.com",
+  "https://crm-hrx8.onrender.com:443", // ✅ ADD THIS
 ];
 
 app.use(
