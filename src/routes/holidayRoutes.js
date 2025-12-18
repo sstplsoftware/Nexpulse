@@ -10,7 +10,6 @@ import {
 
 const router = express.Router();
 
-// 🔐 Auth required
 router.use(authMiddleware);
 
 // CREATE
@@ -20,10 +19,10 @@ router.post(
   markHoliday
 );
 
-// READ  ✅ THIS WAS MISSING
+// READ
 router.get(
   "/",
-  employeePermission("HOLIDAYS_VIEW"),
+  employeePermission("HOLIDAYS_MARK"),
   getHolidays
 );
 
