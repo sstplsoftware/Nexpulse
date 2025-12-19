@@ -104,7 +104,7 @@ app.use("/api/employee", employeeRoutes);
 app.use("/api/bell", bellRoutes);
 app.use("/api/mis", misRoutes);
 app.use("/api/attendance", attendanceRoutes);
-app.use("/api/employee/holidays", holidayRoutes);
+app.use("/api/holidays", holidayRoutes);
 /* =====================================================
    HEALTH CHECK
 ===================================================== */
