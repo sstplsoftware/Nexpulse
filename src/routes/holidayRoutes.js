@@ -2,7 +2,6 @@ import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { employeePermission } from "../middleware/permissionMiddleware.js";
 import { PERMISSIONS } from "../constants/permissions.js";
-
 import {
   markHoliday,
   getHolidays,
@@ -12,17 +11,16 @@ import {
 
 const router = express.Router();
 
-// 🔐 Auth required
 router.use(authMiddleware);
 
-// CREATE – Admin OR Employee with HOLIDAYS_MARK
+// CREATE
 router.post(
   "/mark",
   employeePermission(PERMISSIONS.HOLIDAYS_MARK),
   markHoliday
 );
 
-// READ – Admin OR Employee with HOLIDAYS_VIEW
+// READ
 router.get(
   "/",
   employeePermission(PERMISSIONS.HOLIDAYS_VIEW),

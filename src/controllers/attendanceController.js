@@ -3,6 +3,8 @@ import Attendance from "../models/Attendance.js";
 import User from "../models/User.js";
 import { getDistanceMeters } from "../utils/distance.js";
 import Holiday from "../models/Holiday.js";
+import { resolveAdminId } from "../utils/resolveAdminId.js";
+
 
 // Format time (HH:mm → minutes)
 function timeToMinutes(t) {
@@ -47,9 +49,6 @@ function parseTimeStringToMinutes(str) {
   return hour * 60 + minute;
 }
 
-function resolveAdminId(user) {
-  return user.role === "EMPLOYEE" ? user.createdBy : user._id;
-}
 
 function canManageAttendance(user) {
   if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") return true;
@@ -116,8 +115,7 @@ export const saveSettings = async (req, res) => {
 // ===============================
 export const getSettings = async (req, res) => {
   try {
-    const adminId =
-      req.user.role === "EMPLOYEE" ? req.user.createdBy : req.user._id;
+    const adminId = resolveAdminId(req.user);
 
     const settings = await AttendanceSettings.findOne({ adminId });
 
@@ -140,7 +138,7 @@ export const getTodayAttendance = async (req, res) => {
       return res.status(403).json({ message: "EMPLOYEE only" });
 
     const employeeId = req.user._id;
-    const adminId = req.user.createdBy;
+    const adminId = resolveAdminId(req.user);
     const today = getTodayKey();
     const month = today.slice(0, 7);
 
@@ -185,10 +183,27 @@ export const markAttendance = async (req, res) => {
 
     if (req.user.role !== "EMPLOYEE")
       return res.status(403).json({ message: "EMPLOYEE only" });
+    const today = getTodayKey();
+const adminId = resolveAdminId(req.user);
+
+if (isSunday(today)) {
+  return res.status(400).json({
+    message: "Attendance not allowed on Sunday (Week Off)",
+  });
+}
+
+const holidayExists = await Holiday.exists({
+  adminId,
+  date: today,
+});
+
+if (holidayExists) {
+  return res.status(400).json({
+    message: "Attendance not allowed on Holiday",
+  });
+}
 
     const employeeId = req.user._id;
-    const adminId = req.user.createdBy;
-
     const settings = await AttendanceSettings.findOne({ adminId });
     if (!settings)
       return res.status(400).json({ message: "Attendance settings missing" });
@@ -203,7 +218,6 @@ export const markAttendance = async (req, res) => {
       return res.status(403).json({ message: "Outside allowed attendance area" });
 
     const now = getNowString();
-    const today = getTodayKey();
 
     let record = await Attendance.findOne({ employeeId, adminId, date: today });
 
@@ -412,7 +426,7 @@ export const getMyMonthlyAttendance = async (req, res) => {
       return res.status(403).json({ message: "EMPLOYEE only" });
 
     const employeeId = req.user._id;
-    const adminId = req.user.createdBy;
+    const adminId = resolveAdminId(req.user);
     const month = req.query.month || new Date().toISOString().slice(0, 7);
 
     const records = await Attendance.find({

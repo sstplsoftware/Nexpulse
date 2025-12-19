@@ -37,7 +37,7 @@ export async function markHoliday(req, res) {
 }
 
 /* ==============================
-   GET HOLIDAYS (VIEW)
+   GET HOLIDAYS
 ============================== */
 export async function getHolidays(req, res) {
   try {
@@ -63,11 +63,7 @@ export async function updateHoliday(req, res) {
     const { id } = req.params;
     const { holidayName, holidayDate, description } = req.body;
 
-    const holiday = await Holiday.findOne({
-      _id: id,
-      adminId,
-    });
-
+    const holiday = await Holiday.findOne({ _id: id, adminId });
     if (!holiday) {
       return res.status(404).json({ message: "Holiday not found" });
     }
@@ -77,7 +73,6 @@ export async function updateHoliday(req, res) {
     if (description !== undefined) holiday.description = description;
 
     await holiday.save();
-
     return res.json({ ok: true, holiday });
   } catch (err) {
     console.error("updateHoliday error:", err.message);
@@ -93,11 +88,7 @@ export async function deleteHoliday(req, res) {
     const adminId = resolveAdminId(req.user);
     const { id } = req.params;
 
-    const holiday = await Holiday.findOneAndDelete({
-      _id: id,
-      adminId,
-    });
-
+    const holiday = await Holiday.findOneAndDelete({ _id: id, adminId });
     if (!holiday) {
       return res.status(404).json({ message: "Holiday not found" });
     }
