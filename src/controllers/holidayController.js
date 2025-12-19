@@ -24,20 +24,20 @@ export async function markHoliday(req, res) {
 
     const holiday = await Holiday.create({
       adminId,
-      date: holidayDate,
       name: holidayName,
-      description,
+      date: holidayDate,
+      description: description || "",
     });
 
     return res.json({ ok: true, holiday });
   } catch (err) {
-    console.error("markHoliday error:", err.message);
+    console.error("markHoliday error", err);
     return res.status(500).json({ message: err.message });
   }
 }
 
 /* ==============================
-   GET HOLIDAYS
+   LIST HOLIDAYS
 ============================== */
 export async function getHolidays(req, res) {
   try {
@@ -47,36 +47,10 @@ export async function getHolidays(req, res) {
       .sort({ date: 1 })
       .lean();
 
-    return res.json({ ok: true, holidays });
+    res.json({ ok: true, holidays });
   } catch (err) {
-    console.error("getHolidays error:", err.message);
-    return res.status(500).json({ message: err.message });
-  }
-}
-
-/* ==============================
-   UPDATE HOLIDAY
-============================== */
-export async function updateHoliday(req, res) {
-  try {
-    const adminId = resolveAdminId(req.user);
-    const { id } = req.params;
-    const { holidayName, holidayDate, description } = req.body;
-
-    const holiday = await Holiday.findOne({ _id: id, adminId });
-    if (!holiday) {
-      return res.status(404).json({ message: "Holiday not found" });
-    }
-
-    if (holidayName) holiday.name = holidayName;
-    if (holidayDate) holiday.date = holidayDate;
-    if (description !== undefined) holiday.description = description;
-
-    await holiday.save();
-    return res.json({ ok: true, holiday });
-  } catch (err) {
-    console.error("updateHoliday error:", err.message);
-    return res.status(500).json({ message: err.message });
+    console.error("getHolidays error", err);
+    res.status(500).json({ message: "Server error" });
   }
 }
 
@@ -88,14 +62,18 @@ export async function deleteHoliday(req, res) {
     const adminId = resolveAdminId(req.user);
     const { id } = req.params;
 
-    const holiday = await Holiday.findOneAndDelete({ _id: id, adminId });
-    if (!holiday) {
+    const deleted = await Holiday.findOneAndDelete({
+      _id: id,
+      adminId,
+    });
+
+    if (!deleted) {
       return res.status(404).json({ message: "Holiday not found" });
     }
 
-    return res.json({ ok: true });
+    res.json({ ok: true });
   } catch (err) {
-    console.error("deleteHoliday error:", err.message);
-    return res.status(500).json({ message: err.message });
+    console.error("deleteHoliday error", err);
+    res.status(500).json({ message: "Server error" });
   }
 }

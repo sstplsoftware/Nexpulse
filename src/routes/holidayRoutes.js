@@ -1,11 +1,11 @@
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
-import { employeePermission } from "../middleware/permissionMiddleware.js";
+import { adminOrEmployeePermission } from "../middleware/permissionMiddleware.js";
 import { PERMISSIONS } from "../constants/permissions.js";
+
 import {
   markHoliday,
   getHolidays,
-  updateHoliday,
   deleteHoliday,
 } from "../controllers/holidayController.js";
 
@@ -13,31 +13,24 @@ const router = express.Router();
 
 router.use(authMiddleware);
 
-// CREATE
-router.post(
-  "/mark",
-  employeePermission(PERMISSIONS.HOLIDAYS_MARK),
-  markHoliday
-);
-
-// READ
+// VIEW holidays
 router.get(
   "/",
-  employeePermission(PERMISSIONS.HOLIDAYS_VIEW),
+  adminOrEmployeePermission(PERMISSIONS.HOLIDAYS_VIEW),
   getHolidays
 );
 
-// UPDATE
-router.put(
-  "/:id",
-  employeePermission(PERMISSIONS.HOLIDAYS_MARK),
-  updateHoliday
+// MARK holiday
+router.post(
+  "/",
+  adminOrEmployeePermission(PERMISSIONS.HOLIDAYS_MARK),
+  markHoliday
 );
 
-// DELETE
+// DELETE holiday
 router.delete(
   "/:id",
-  employeePermission(PERMISSIONS.HOLIDAYS_MARK),
+  adminOrEmployeePermission(PERMISSIONS.HOLIDAYS_MARK),
   deleteHoliday
 );
 
