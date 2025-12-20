@@ -68,9 +68,10 @@ router.put("/manage/:id", updateAttendance);
 router.delete("/manage/:id", deleteAttendance);
 
 router.get(
-  "/attendance/manage",
-  authMiddleware,
+  "/manage/filtered",
+  employeePermission(PERMISSIONS.ATTENDANCE_MANAGE),
   getManageAttendanceFiltered
 );
+
 
 export default router;
