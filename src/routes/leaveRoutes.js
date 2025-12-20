@@ -8,6 +8,8 @@ import {
   getMyLeaves,
   getPendingLeaves,
   updateLeaveStatus,
+  getLeaveBalance,
+   getLeaveHistory, // ✅ IMPORT
 } from "../controllers/leaveController.js";
 
 const router = express.Router();
@@ -37,6 +39,18 @@ router.put(
   "/:id/status",
   adminOrEmployeePermission(PERMISSIONS.LEAVE_APPROVAL),
   updateLeaveStatus
+);
+router.get(
+  "/balance",
+  adminOrEmployeePermission(PERMISSIONS.LEAVE_REQUEST),
+  getLeaveBalance
+);
+
+// ✅ ADD THIS
+router.get(
+  "/history",
+  adminOrEmployeePermission(PERMISSIONS.LEAVE_APPROVAL),
+  getLeaveHistory
 );
 
 export default router;

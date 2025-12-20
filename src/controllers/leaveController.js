@@ -46,6 +46,7 @@ export const getMyLeaves = async (req, res) => {
     const employeeId = req.user._id;
 
     const leaves = await Leave.find({ employeeId })
+      .populate("approvedBy", "profile.name role") // ✅ ADD THIS
       .sort({ createdAt: -1 })
       .lean();
 
@@ -54,6 +55,7 @@ export const getMyLeaves = async (req, res) => {
     res.status(500).json({ message: "Failed to load leaves" });
   }
 };
+
 
 /* =========================
    ADMIN: LIST PENDING LEAVES
@@ -136,3 +138,76 @@ export const updateLeaveStatus = async (req, res) => {
     res.status(500).json({ message: "Failed to update leave" });
   }
 };
+/* =========================
+   GET LEAVE BALANCE (EMPLOYEE)
+========================= */
+export const getLeaveBalance = async (req, res) => {
+  try {
+    if (req.user.role !== "EMPLOYEE") {
+      return res.status(403).json({ message: "EMPLOYEE only" });
+    }
+
+    const employeeId = req.user._id;
+    const adminId = resolveAdminId(req.user);
+
+    const MONTHLY_CL = 1;
+    const MONTHLY_SL = 1;
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    // ✅ ONLY approved + paid leaves of current month
+    const leaves = await Leave.find({
+      employeeId,
+      adminId,
+      status: "APPROVED",
+      isPaid: true,
+      createdAt: {
+        $gte: startOfMonth,
+        $lte: endOfMonth,
+      },
+    });
+
+    let usedCL = 0;
+    let usedSL = 0;
+
+    leaves.forEach((l) => {
+      if (l.type === "CL") usedCL += l.days;
+      if (l.type === "SL") usedSL += l.days;
+    });
+
+    res.json({
+      CL: Math.max(0, MONTHLY_CL - usedCL),
+      SL: Math.max(0, MONTHLY_SL - usedSL),
+    });
+  } catch (err) {
+    console.error("getLeaveBalance", err);
+    res.status(500).json({ message: "Failed to load balance" });
+  }
+};
+/* =========================
+   GET LEAVE HISTORY (EMPLOYEE)
+========================= */
+
+export const getLeaveHistory = async (req, res) => {
+  try {
+    const adminId = resolveAdminId(req.user);
+
+    const leaves = await Leave.find({
+      adminId,
+      status: { $in: ["APPROVED", "REJECTED"] },
+    })
+      .populate("employeeId", "profile.name designation")
+      .populate("approvedBy", "profile.name role")
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    res.json({ ok: true, leaves });
+  } catch (err) {
+    console.error("getLeaveHistory", err);
+    res.status(500).json({ message: "Failed to load leave history" });
+  }
+};
+
+
