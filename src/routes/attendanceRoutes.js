@@ -48,6 +48,12 @@ router.post(
   markAttendance
 );
 
+router.get(
+  "/manage/filtered",
+  employeePermission(PERMISSIONS.ATTENDANCE_MANAGE),
+  getManageAttendanceFiltered
+);
+
 // ADMIN / MANAGER
 router.get(
   "/manage",
@@ -67,11 +73,6 @@ router.get("/employees", getManageEmployeesAll);
 router.put("/manage/:id", updateAttendance);
 router.delete("/manage/:id", deleteAttendance);
 
-router.get(
-  "/manage/filtered",
-  employeePermission(PERMISSIONS.ATTENDANCE_MANAGE),
-  getManageAttendanceFiltered
-);
 
 
 export default router;
