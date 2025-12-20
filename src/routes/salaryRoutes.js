@@ -1,15 +1,51 @@
 import express from "express";
-import { authMiddleware } from "../middleware/authMiddleware.js";
 import {
-  manageSalary,
-  adminSalaries,
-  mySalary,
+  upsertSalary,
+  adminSalaryList,
+  mySalaryByMonth,
+  mySalaryHistory,
+  deleteSalary,
 } from "../controllers/salaryController.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
+import { roleMiddleware } from "../middleware/roleMiddleware.js";
 
 const router = express.Router();
 
-router.post("/manage", authMiddleware, manageSalary);
-router.get("/admin/all", authMiddleware, adminSalaries);
-router.get("/my", authMiddleware, mySalary);
+/* ================= EMPLOYEE ================= */
+router.get(
+  "/my",
+  authMiddleware,
+  roleMiddleware("employee"),
+  mySalaryByMonth
+);
+
+router.get(
+  "/my/history",
+  authMiddleware,
+  roleMiddleware("employee"),
+  mySalaryHistory
+);
+
+/* ================= ADMIN ================= */
+router.post(
+  "/manage",
+  authMiddleware,
+  roleMiddleware("admin"),
+  upsertSalary
+);
+
+router.get(
+  "/admin",
+  authMiddleware,
+  roleMiddleware("admin"),
+  adminSalaryList
+);
+
+router.delete(
+  "/:id",
+  authMiddleware,
+  roleMiddleware("admin"),
+  deleteSalary
+);
 
 export default router;

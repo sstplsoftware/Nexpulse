@@ -29,6 +29,7 @@ import bellRoutes from "./routes/bellRoutes.js";
 import adminMisRoutes from "./routes/adminMisRoutes.js";
 import attendanceRoutes from "./routes/attendanceRoutes.js";
 import holidayRoutes from "./routes/holidayRoutes.js";
+import salaryRoutes from "./routes/salaryRoutes.js";
 // Socket Systems
 import { initBellSocket } from "./socket/bellSocket.js";
 import { initHrmSocket } from "./socket/hrmSocket.js";
@@ -108,6 +109,7 @@ app.use("/api/mis", misRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/holidays", holidayRoutes);
 app.use("/api/leaves", leaveRoutes);
+app.use("/api/salary", salaryRoutes);
 /* =====================================================
    HEALTH CHECK
 ===================================================== */
