@@ -1,8 +1,9 @@
-// C:\NexPulse\backend\src\routes\salaryRoutes.js
-
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
-import { roleMiddleware } from "../middleware/roleMiddleware.js";
+import {
+  canManageSalary,
+  canMarkSalaryPaid,
+} from "../middleware/salaryPermission.js";
 
 import {
   getMySalary,
@@ -17,14 +18,20 @@ const router = express.Router();
 
 router.use(authMiddleware);
 
-/* ================= EMPLOYEE ================= */
-router.get("/my", roleMiddleware("EMPLOYEE"), getMySalary);
-router.get("/my/history", roleMiddleware("EMPLOYEE"), getSalaryHistory);
+// ================= EMPLOYEE =================
+router.get("/my", getMySalary);
+router.get("/my/history", getSalaryHistory);
 
-/* ================= ADMIN ================= */
-router.get("/admin", roleMiddleware("ADMIN"), getAdminSalaries);
-router.post("/manage", roleMiddleware("ADMIN"), createOrUpdateSalary);
-router.delete("/:id", roleMiddleware("ADMIN"), deleteSalary);
-router.patch("/:id/pay", roleMiddleware("ADMIN"), markSalaryPaid);
+// ================= VIEW =================
+router.get("/admin", canManageSalary, getAdminSalaries);
+
+// ================= CREATE / UPDATE =================
+router.post("/manage", canManageSalary, createOrUpdateSalary);
+
+// ================= DELETE =================
+router.delete("/:id", canManageSalary, deleteSalary);
+
+// ================= MARK PAID =================
+router.patch("/:id/pay", canMarkSalaryPaid, markSalaryPaid);
 
 export default router;

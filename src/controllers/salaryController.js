@@ -58,7 +58,7 @@ export const getAdminSalaries = async (req, res) => {
 };
 
 /* =========================
-   ADMIN: CREATE / UPDATE
+   ADMIN: CREATE / UPDATE SALARY
 ========================= */
 export const createOrUpdateSalary = async (req, res) => {
   try {
@@ -69,70 +69,84 @@ export const createOrUpdateSalary = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // 🔒 LOCK if already PAID
-    const existing = await Salary.findOne({ employeeId, month });
+    // 🔒 HARD LOCK — PAID SALARY
+    const existing = await Salary.findOne({ employeeId, month, adminId });
     if (existing && existing.status === "PAID") {
-      return res
-        .status(400)
-        .json({ message: "Salary already PAID and locked" });
+      return res.status(400).json({
+        message: "Salary already PAID and locked",
+      });
     }
 
-    // 🔥 Attendance for month (already excludes Sundays/Holidays)
+    // 🔥 FETCH ATTENDANCE (EXCLUDES SUNDAYS / HOLIDAYS BY DESIGN)
     const attendance = await Attendance.find({
       employeeId,
       adminId,
       date: { $regex: `^${month}` },
     }).lean();
 
-    // 📅 Days in month
-    const [year, mon] = month.split("-").map(Number);
-    const daysInMonth = new Date(year, mon, 0).getDate();
-
-    let absentDays = 0;
     let paidDays = 0;
+    let absentDays = 0;
 
     attendance.forEach((a) => {
-      if (a.status === "Absent") absentDays++;
-      else if (
-        a.status === "On Time" ||
-        a.status === "Late" ||
-        a.status === "Half Day"
-      ) {
-        paidDays++;
+      switch (a.status) {
+        case "Absent":
+          absentDays++;
+          break;
+
+        case "On Time":
+        case "Late":
+        case "Half Day":
+          paidDays++;
+          break;
+
+        default:
+          // Safety: treat unknown as unpaid
+          absentDays++;
       }
     });
 
-    const perDay = baseSalary / daysInMonth;
+    const totalWorkingDays = paidDays + absentDays;
+
+    // 🧮 PER DAY SALARY
+    const perDay =
+      totalWorkingDays > 0 ? baseSalary / totalWorkingDays : 0;
+
     const deduction = Math.round(absentDays * perDay);
     const finalSalary = Math.max(
       0,
       Math.round(baseSalary - deduction)
     );
 
+    // 💾 UPSERT SALARY
     const salary = await Salary.findOneAndUpdate(
-      { employeeId, month },
+      { employeeId, month, adminId },
       {
         employeeId,
         adminId,
         month,
         baseSalary,
-        totalWorkingDays: daysInMonth,
+        totalWorkingDays,
         paidDays,
         absentDays,
         deduction,
         finalSalary,
         status: "PENDING",
+
+        // 🧾 AUDIT
         generatedBy: req.user._id,
+        lastUpdatedBy: req.user._id,
+        lastRecalculatedAt: new Date(),
       },
       { upsert: true, new: true }
     );
 
     res.json({ ok: true, salary });
   } catch (err) {
-    console.error(err);
+    console.error("SALARY ERROR:", err);
     res.status(500).json({ message: "Salary calculation failed" });
   }
 };
+
 
 /* =========================
    ADMIN: DELETE

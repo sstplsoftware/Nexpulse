@@ -49,7 +49,19 @@ const salarySchema = new mongoose.Schema(
       enum: ["PENDING", "PAID"],
       default: "PENDING",
     },
+    lastRecalculatedBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+},
 
+lastRecalculatedAt: {
+  type: Date,
+},
+
+lastUpdatedBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+},
     generatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

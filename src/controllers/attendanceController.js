@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import { getDistanceMeters } from "../utils/distance.js";
 import Holiday from "../models/Holiday.js";
 import { resolveAdminId } from "../utils/resolveAdminId.js";
+import { recalculateSalaryForEmployee } from "../utils/recalculateSalary.js";
 
 
 // Format time (HH:mm → minutes)
@@ -303,7 +304,6 @@ export const updateAttendance = async (req, res) => {
       adminId: record.adminId,
       date: record.date,
     });
-
     if (holidayExists)
       return res.status(400).json({ message: "Cannot edit Holiday" });
 
@@ -321,6 +321,16 @@ export const updateAttendance = async (req, res) => {
     }
 
     await record.save();
+
+    // 🔁 AUTO RECALC SALARY (SAFE)
+    const month = record.date.slice(0, 7);
+    await recalculateSalaryForEmployee({
+      employeeId: record.employeeId,
+      adminId: record.adminId,
+      month,
+      updatedBy: req.user._id,
+    });
+
     res.json({ message: "Attendance updated", record });
   } catch (err) {
     console.error(err);
@@ -328,18 +338,34 @@ export const updateAttendance = async (req, res) => {
   }
 };
 
+//=================================
 export const deleteAttendance = async (req, res) => {
   try {
     if (req.user.role !== "ADMIN")
       return res.status(403).json({ message: "ADMIN only" });
 
+    const record = await Attendance.findById(req.params.id);
+    if (!record) return res.status(404).json({ message: "Not found" });
+
     await Attendance.findByIdAndDelete(req.params.id);
+
+    // 🔁 AUTO RECALC SALARY
+    const month = record.date.slice(0, 7);
+    await recalculateSalaryForEmployee({
+      employeeId: record.employeeId,
+      adminId: record.adminId,
+      month,
+      updatedBy: req.user._id,
+    });
+
     res.json({ message: "Attendance deleted" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to delete attendance" });
   }
 };
+
+//================================
 export const getManageEmployeesAll = async (req, res) => {
   try {
     if (!canManageAttendance(req.user))
@@ -360,7 +386,7 @@ export const getManageEmployeesAll = async (req, res) => {
     res.status(500).json({ message: "Failed to load employees" });
   }
 };
-
+//==================================
 export const getManageAttendanceAllEmployees = async (req, res) => {
   try {
     if (!canManageAttendance(req.user))
