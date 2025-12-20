@@ -24,22 +24,22 @@ const salarySchema = new mongoose.Schema(
       required: true,
     },
 
-    totalWorkingDays: Number,
-    presentDays: Number,
-    paidLeaveDays: Number,
-    unpaidLeaveDays: Number,
-
-    leaveDeduction: {
+    totalWorkingDays: {
       type: Number,
       default: 0,
     },
 
-    otherDeductions: {
+    absentDays: {
       type: Number,
       default: 0,
     },
 
-    netSalary: {
+    deduction: {
+      type: Number,
+      default: 0,
+    },
+
+    finalSalary: {
       type: Number,
       required: true,
     },
@@ -50,11 +50,12 @@ const salarySchema = new mongoose.Schema(
       default: "PENDING",
     },
 
-    remarks: String,
+    generatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
   },
   { timestamps: true }
 );
-
-salarySchema.index({ employeeId: 1, month: 1 }, { unique: true });
 
 export default mongoose.model("Salary", salarySchema);

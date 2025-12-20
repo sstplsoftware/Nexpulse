@@ -1,3 +1,5 @@
+// C:\NexPulse\backend\src\controllers\salaryController.js
+
 import Salary from "../models/Salary.js";
 import Attendance from "../models/Attendance.js";
 import { resolveAdminId } from "../utils/resolveAdminId.js";
@@ -8,15 +10,11 @@ import { resolveAdminId } from "../utils/resolveAdminId.js";
 export const getMySalary = async (req, res) => {
   try {
     const employeeId = req.user._id;
-    const month = req.query.month; // YYYY-MM
+    const month = req.query.month;
 
     const salary = await Salary.findOne({ employeeId, month });
 
-    if (!salary) {
-      return res.status(200).json(null); // frontend fallback works
-    }
-
-    res.json(salary);
+    res.json(salary || null);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to load salary" });
@@ -29,7 +27,6 @@ export const getMySalary = async (req, res) => {
 export const getSalaryHistory = async (req, res) => {
   try {
     const employeeId = req.user._id;
-
     const rows = await Salary.find({ employeeId }).sort({ month: -1 });
     res.json({ rows });
   } catch {
@@ -66,33 +63,51 @@ export const getAdminSalaries = async (req, res) => {
 export const createOrUpdateSalary = async (req, res) => {
   try {
     const adminId = resolveAdminId(req.user);
+    const { employeeId, month, baseSalary } = req.body;
 
-    const {
-      employeeId,
-      month,
-      baseSalary,
-    } = req.body;
+    if (!employeeId || !month || !baseSalary) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
 
-    // 🔥 Attendance-based calculation
+    // 🔒 LOCK if already PAID
+    const existing = await Salary.findOne({ employeeId, month });
+    if (existing && existing.status === "PAID") {
+      return res
+        .status(400)
+        .json({ message: "Salary already PAID and locked" });
+    }
+
+    // 🔥 Attendance for month (already excludes Sundays/Holidays)
     const attendance = await Attendance.find({
       employeeId,
       adminId,
       date: { $regex: `^${month}` },
-    });
+    }).lean();
 
-    const totalWorkingDays = attendance.length;
-    let paidDays = 0;
+    // 📅 Days in month
+    const [year, mon] = month.split("-").map(Number);
+    const daysInMonth = new Date(year, mon, 0).getDate();
+
     let absentDays = 0;
+    let paidDays = 0;
 
     attendance.forEach((a) => {
-      if (a.status?.includes("PAID")) paidDays++;
-      else if (a.status === "Absent") absentDays++;
-      else paidDays++;
+      if (a.status === "Absent") absentDays++;
+      else if (
+        a.status === "On Time" ||
+        a.status === "Late" ||
+        a.status === "Half Day"
+      ) {
+        paidDays++;
+      }
     });
 
-    const perDay = baseSalary / totalWorkingDays;
-    const deduction = absentDays * perDay;
-    const finalSalary = Math.round(baseSalary - deduction);
+    const perDay = baseSalary / daysInMonth;
+    const deduction = Math.round(absentDays * perDay);
+    const finalSalary = Math.max(
+      0,
+      Math.round(baseSalary - deduction)
+    );
 
     const salary = await Salary.findOneAndUpdate(
       { employeeId, month },
@@ -101,11 +116,12 @@ export const createOrUpdateSalary = async (req, res) => {
         adminId,
         month,
         baseSalary,
-        totalWorkingDays,
+        totalWorkingDays: daysInMonth,
         paidDays,
         absentDays,
         deduction,
         finalSalary,
+        status: "PENDING",
         generatedBy: req.user._id,
       },
       { upsert: true, new: true }
@@ -130,15 +146,31 @@ export const deleteSalary = async (req, res) => {
     res.status(500).json({ message: "Delete failed" });
   }
 };
+
+/* =========================
+   ADMIN: MARK PAID
+========================= */
 export const markSalaryPaid = async (req, res) => {
-  const salary = await Salary.findById(req.params.id);
-  if (!salary) return res.status(404).json({ message: "Not found" });
+  try {
+    const adminId = resolveAdminId(req.user);
+    const salary = await Salary.findOne({
+      _id: req.params.id,
+      adminId,
+    });
 
-  if (salary.status === "PAID")
-    return res.status(400).json({ message: "Already paid" });
+    if (!salary) {
+      return res.status(404).json({ message: "Salary not found" });
+    }
 
-  salary.status = "PAID";
-  await salary.save();
+    if (salary.status === "PAID") {
+      return res.status(400).json({ message: "Already PAID" });
+    }
 
-  res.json({ message: "Salary marked as PAID" });
+    salary.status = "PAID";
+    await salary.save();
+
+    res.json({ message: "Salary marked as PAID" });
+  } catch {
+    res.status(500).json({ message: "Failed to mark PAID" });
+  }
 };
