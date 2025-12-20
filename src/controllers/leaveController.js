@@ -1,56 +1,138 @@
 import Leave from "../models/Leave.js";
-import User from "../models/User.js";
+import Attendance from "../models/Attendance.js";
+import { resolveAdminId } from "../utils/resolveAdminId.js";
 
-// EMPLOYEE REQUESTS LEAVE
+/* =========================
+   REQUEST LEAVE (EMPLOYEE)
+========================= */
 export const requestLeave = async (req, res) => {
   try {
-    const user = req.user;
+    if (req.user.role !== "EMPLOYEE") {
+      return res.status(403).json({ message: "EMPLOYEE only" });
+    }
 
-    const leave = new Leave({
-      employeeId: user._id,
-      createdBy: user.createdBy,
-      ...req.body,
+    const adminId = resolveAdminId(req.user);
+    const employeeId = req.user._id;
+
+    const { type, from, to, days, isPaid, reason } = req.body;
+
+    if (!type || !from || !to || !days || !reason) {
+      return res.status(400).json({ message: "Missing fields" });
+    }
+
+    const leave = await Leave.create({
+      employeeId,
+      adminId,
+      type,
+      fromDate: from,
+      toDate: to,
+      days,
+      isPaid,
+      reason,
     });
+
+    res.json({ ok: true, leave });
+  } catch (err) {
+    console.error("requestLeave", err);
+    res.status(500).json({ message: "Failed to request leave" });
+  }
+};
+
+/* =========================
+   LIST MY LEAVES (EMPLOYEE)
+========================= */
+export const getMyLeaves = async (req, res) => {
+  try {
+    const employeeId = req.user._id;
+
+    const leaves = await Leave.find({ employeeId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json({ ok: true, leaves });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to load leaves" });
+  }
+};
+
+/* =========================
+   ADMIN: LIST PENDING LEAVES
+========================= */
+export const getPendingLeaves = async (req, res) => {
+  try {
+    const adminId = resolveAdminId(req.user);
+
+    const leaves = await Leave.find({
+      adminId,
+      status: "PENDING",
+    })
+      .populate("employeeId", "profile.name employeeId")
+      .sort({ createdAt: -1 });
+
+    res.json({ ok: true, leaves });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to load requests" });
+  }
+};
+
+/* =========================
+   APPROVE / REJECT LEAVE
+========================= */
+export const updateLeaveStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, rejectionReason } = req.body;
+
+    const adminId = resolveAdminId(req.user);
+
+    const leave = await Leave.findOne({ _id: id, adminId });
+    if (!leave) {
+      return res.status(404).json({ message: "Leave not found" });
+    }
+
+    leave.status = status;
+    leave.approvedBy = req.user._id;
+
+    if (status === "REJECTED") {
+      leave.rejectionReason = rejectionReason || "";
+    }
 
     await leave.save();
 
-    res.json({ message: "Leave request submitted", leave });
+    // 🔥 ATTENDANCE INTEGRATION (ONLY ON APPROVE)
+    if (status === "APPROVED") {
+      const start = new Date(leave.fromDate);
+      const end = new Date(leave.toDate);
+
+      for (
+        let d = new Date(start);
+        d <= end;
+        d.setDate(d.getDate() + 1)
+      ) {
+        const dateKey = d.toISOString().slice(0, 10);
+
+        await Attendance.findOneAndUpdate(
+          {
+            employeeId: leave.employeeId,
+            adminId,
+            date: dateKey,
+          },
+          {
+            employeeId: leave.employeeId,
+            adminId,
+            date: dateKey,
+            status: leave.isPaid
+              ? `${leave.type}_PAID`
+              : "Absent",
+          },
+          { upsert: true }
+        );
+      }
+    }
+
+    res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ message: "Error submitting leave" });
-  }
-};
-
-// EMPLOYEE VIEW LEAVE HISTORY
-export const myLeaves = async (req, res) => {
-  try {
-    const list = await Leave.find({ employeeId: req.user._id });
-    res.json(list);
-  } catch (err) {
-    res.status(500).json({ message: "Error loading leave history" });
-  }
-};
-
-// ADMIN SEES LEAVE REQUESTS
-export const adminLeaveRequests = async (req, res) => {
-  try {
-    const list = await Leave.find({ createdBy: req.user._id })
-      .populate("employeeId", "profile.name");
-
-    res.json(list);
-  } catch (err) {
-    res.status(500).json({ message: "Error loading leave requests" });
-  }
-};
-
-// ADMIN APPROVES OR REJECTS LEAVE
-export const approveLeave = async (req, res) => {
-  try {
-    await Leave.findByIdAndUpdate(req.params.id, {
-      status: req.body.status,
-    });
-
-    res.json({ message: "Leave updated" });
-  } catch (err) {
-    res.status(500).json({ message: "Error approving leave" });
+    console.error("updateLeaveStatus", err);
+    res.status(500).json({ message: "Failed to update leave" });
   }
 };

@@ -35,6 +35,8 @@ import { initHrmSocket } from "./socket/hrmSocket.js";
 
 import misRoutes from "./routes/misRoutes.js";
 
+import leaveRoutes from "./routes/leaveRoutes.js";
+
 const app = express();
 const httpServer = http.createServer(app);
 
@@ -105,6 +107,7 @@ app.use("/api/bell", bellRoutes);
 app.use("/api/mis", misRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/holidays", holidayRoutes);
+app.use("/api/leaves", leaveRoutes);
 /* =====================================================
    HEALTH CHECK
 ===================================================== */
