@@ -12,6 +12,7 @@ import {
   updateAttendance,
   deleteAttendance,
   getMyMonthlyAttendance,
+  getManageAttendanceFiltered,
 } from "../controllers/attendanceController.js";
 import { employeePermission } from "../middleware/permissionMiddleware.js";
 import { PERMISSIONS } from "../constants/permissions.js";
@@ -65,5 +66,11 @@ router.get("/employees", getManageEmployeesAll);
 // ===============================
 router.put("/manage/:id", updateAttendance);
 router.delete("/manage/:id", deleteAttendance);
+
+router.get(
+  "/attendance/manage",
+  authMiddleware,
+  getManageAttendanceFiltered
+);
 
 export default router;
