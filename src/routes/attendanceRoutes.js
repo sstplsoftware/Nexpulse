@@ -1,98 +1,67 @@
 // C:\NexPulse\backend\src\routes\attendanceRoutes.js
 
 import express from "express";
+import { authMiddleware } from "../middleware/authMiddleware.js";
+import { employeePermission } from "../middleware/permissionMiddleware.js";
+import { PERMISSIONS } from "../constants/permissions.js";
+
 import {
   saveSettings,
   getSettings,
   markAttendance,
   getTodayAttendance,
-  getManageAttendance,       // ✅ SINGLE unified controller
+  getMyMonthlyAttendance,
+  getManageAttendance,
   getManageEmployeesAll,
   updateAttendance,
   deleteAttendance,
-  getMyMonthlyAttendance,
 } from "../controllers/attendanceController.js";
-
-import { employeePermission } from "../middleware/permissionMiddleware.js";
-import { PERMISSIONS } from "../constants/permissions.js";
-import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 // 🔐 AUTH REQUIRED
 router.use(authMiddleware);
 
-// ===============================
-// SETTINGS (ADMIN)
-// ===============================
-router.post(
-  "/settings",
-  employeePermission(PERMISSIONS.ATTENDANCE_MANAGE),
-  saveSettings
-);
+/* ================= SETTINGS ================= */
+router.post("/settings", saveSettings);
+router.get("/settings", getSettings);
 
-router.get(
-  "/settings",
-  employeePermission(PERMISSIONS.ATTENDANCE_MARK),
-  getSettings
-);
+/* ================= EMPLOYEE ================= */
 
-// ===============================
-// EMPLOYEE SELF
-// ===============================
+// Monthly self attendance
+router.get("/my", getMyMonthlyAttendance);
+
+// Today status
 router.get(
   "/today",
-  employeePermission(PERMISSONS.ATTENDANCE_VIEW),
+  employeePermission(PERMISSIONS.ATTENDANCE_VIEW),
   getTodayAttendance
 );
 
+// Mark IN / OUT
 router.post(
   "/mark",
-  employeePermission(PERMISSONS.ATTENDANCE_MARK),
+  employeePermission(PERMISSIONS.ATTENDANCE_MARK),
   markAttendance
 );
 
-router.get(
-  "/my",
-  employeePermission(PERMISSONS.ATTENDANCE_VIEW),
-  getMyMonthlyAttendance
-);
+/* ================= ADMIN / HR ================= */
 
-// ===============================
-// ADMIN / HR
-// ===============================
+// 🔥 SINGLE SOURCE OF TRUTH
+// ?month=YYYY-MM
+// ?employeeId=optional
 router.get(
   "/manage",
-  employeePermission(PERMISSONS.ATTENDANCE_MANAGE),
-  getManageAttendance // 🔥 handles ALL / single employee / month
+  employeePermission(PERMISSIONS.ATTENDANCE_MANAGE),
+  getManageAttendance
 );
 
-router.get(
-  "/manage/employees",
-  employeePermission(PERMISSONS.ATTENDANCE_MANAGE),
-  getManageEmployeesAll
-);
+// Employee dropdown
+router.get("/employees", getManageEmployeesAll);
 
-// ✅ ALIAS (frontend compatibility)
-router.get(
-  "/employees",
-  employeePermission(PERMISSONS.ATTENDANCE_MANAGE),
-  getManageEmployeesAll
-);
+/* ================= ADMIN ONLY ================= */
 
-// ===============================
-// ADMIN EDIT
-// ===============================
-router.put(
-  "/manage/:id",
-  employeePermission(PERMISSONS.ATTENDANCE_MANAGE),
-  updateAttendance
-);
-
-router.delete(
-  "/manage/:id",
-  employeePermission(PERMISSONS.ATTENDANCE_MANAGE),
-  deleteAttendance
-);
+router.put("/manage/:id", updateAttendance);
+router.delete("/manage/:id", deleteAttendance);
 
 export default router;

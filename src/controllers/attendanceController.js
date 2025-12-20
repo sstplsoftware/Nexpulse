@@ -287,3 +287,24 @@ export async function deleteAttendance(req, res) {
   await Attendance.findByIdAndDelete(req.params.id);
   res.json({ ok: true });
 }
+// 🔥 THIS IS WHAT WAS MISSING
+export async function getManageAttendance(req, res) {
+  try {
+    const adminId = resolveAdminId(req.user);
+    const { employeeId, month } = req.query;
+
+    const filter = { adminId };
+
+    if (employeeId) filter.employeeId = employeeId;
+    if (month) filter.date = { $regex: `^${month}` };
+
+    const rows = await Attendance.find(filter)
+      .populate("employeeId", "profile.name employeeId")
+      .sort({ date: -1 });
+
+    res.json({ rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to load manage attendance" });
+  }
+}
