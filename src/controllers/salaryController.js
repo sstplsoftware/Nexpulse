@@ -1,112 +1,131 @@
+import Salary from "../models/Salary.js";
 import Attendance from "../models/Attendance.js";
 import { resolveAdminId } from "../utils/resolveAdminId.js";
-import Salary from "../models/Salary.js";
 
-import Salary from "../models/Salary.js";
-
-/* ================= ADMIN: CREATE / UPDATE SALARY ================= */
-export const upsertSalary = async (req, res) => {
+/* =========================
+   EMPLOYEE: CURRENT MONTH
+========================= */
+export const getMySalary = async (req, res) => {
   try {
+    const employeeId = req.user._id;
+    const month = req.query.month; // YYYY-MM
+
+    const salary = await Salary.findOne({ employeeId, month });
+
+    if (!salary) {
+      return res.status(200).json(null); // frontend fallback works
+    }
+
+    res.json(salary);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to load salary" });
+  }
+};
+
+/* =========================
+   EMPLOYEE: HISTORY
+========================= */
+export const getSalaryHistory = async (req, res) => {
+  try {
+    const employeeId = req.user._id;
+
+    const rows = await Salary.find({ employeeId }).sort({ month: -1 });
+    res.json({ rows });
+  } catch {
+    res.status(500).json({ message: "Failed to load history" });
+  }
+};
+
+/* =========================
+   ADMIN: VIEW SALARIES
+========================= */
+export const getAdminSalaries = async (req, res) => {
+  try {
+    const adminId = resolveAdminId(req.user);
+    const { employeeId } = req.query;
+
+    const filter = { adminId };
+    if (employeeId && employeeId !== "all") {
+      filter.employeeId = employeeId;
+    }
+
+    const rows = await Salary.find(filter)
+      .populate("employeeId", "profile.name")
+      .sort({ month: -1 });
+
+    res.json(rows);
+  } catch {
+    res.status(500).json({ message: "Failed to load salaries" });
+  }
+};
+
+/* =========================
+   ADMIN: CREATE / UPDATE
+========================= */
+export const createOrUpdateSalary = async (req, res) => {
+  try {
+    const adminId = resolveAdminId(req.user);
+
     const {
       employeeId,
       month,
       baseSalary,
-      totalWorkingDays,
-      presentDays,
-      paidLeaveDays,
-      unpaidLeaveDays,
-      leaveDeduction,
-      otherDeductions,
-      remarks,
-      status,
     } = req.body;
 
-    const netSalary =
-      baseSalary - (leaveDeduction || 0) - (otherDeductions || 0);
+    // 🔥 Attendance-based calculation
+    const attendance = await Attendance.find({
+      employeeId,
+      adminId,
+      date: { $regex: `^${month}` },
+    });
+
+    const totalWorkingDays = attendance.length;
+    let paidDays = 0;
+    let absentDays = 0;
+
+    attendance.forEach((a) => {
+      if (a.status?.includes("PAID")) paidDays++;
+      else if (a.status === "Absent") absentDays++;
+      else paidDays++;
+    });
+
+    const perDay = baseSalary / totalWorkingDays;
+    const deduction = absentDays * perDay;
+    const finalSalary = Math.round(baseSalary - deduction);
 
     const salary = await Salary.findOneAndUpdate(
       { employeeId, month },
       {
         employeeId,
-        adminId: req.user._id,
+        adminId,
         month,
         baseSalary,
         totalWorkingDays,
-        presentDays,
-        paidLeaveDays,
-        unpaidLeaveDays,
-        leaveDeduction,
-        otherDeductions,
-        netSalary,
-        remarks,
-        status,
+        paidDays,
+        absentDays,
+        deduction,
+        finalSalary,
+        generatedBy: req.user._id,
       },
       { upsert: true, new: true }
     );
 
-    res.json({ message: "Salary saved", salary });
+    res.json({ ok: true, salary });
   } catch (err) {
-    res.status(500).json({ message: "Error saving salary" });
+    console.error(err);
+    res.status(500).json({ message: "Salary calculation failed" });
   }
 };
 
-/* ================= ADMIN: VIEW SALARIES ================= */
-export const adminSalaryList = async (req, res) => {
-  try {
-    const { employeeId } = req.query;
-
-    const filter = {};
-    if (employeeId && employeeId !== "all") {
-      filter.employeeId = employeeId;
-    }
-
-    const salaries = await Salary.find(filter)
-      .populate("employeeId", "profile.name email")
-      .sort({ month: -1 });
-
-    res.json(salaries);
-  } catch {
-    res.status(500).json({ message: "Error loading salaries" });
-  }
-};
-
-/* ================= EMPLOYEE: VIEW OWN SALARY ================= */
-export const mySalaryByMonth = async (req, res) => {
-  try {
-    const { month } = req.query;
-
-    const salary = await Salary.findOne({
-      employeeId: req.user._id,
-      month,
-    });
-
-    if (!salary) {
-      return res.json(null); // frontend safe
-    }
-
-    res.json(salary);
-  } catch {
-    res.status(500).json({ message: "Error loading salary" });
-  }
-};
-
-/* ================= EMPLOYEE: SALARY HISTORY ================= */
-export const mySalaryHistory = async (req, res) => {
-  try {
-    const data = await Salary.find({ employeeId: req.user._id }).sort({
-      month: -1,
-    });
-    res.json(data);
-  } catch {
-    res.status(500).json({ message: "Error loading history" });
-  }
-};
-
-/* ================= ADMIN: DELETE SALARY ================= */
+/* =========================
+   ADMIN: DELETE
+========================= */
 export const deleteSalary = async (req, res) => {
   try {
-    await Salary.findByIdAndDelete(req.params.id);
-    res.json({ message: "Salary deleted" });
+    const adminId = resolveAdminId(req.user);
+    await Salary.deleteOne({ _id: req.params.id, adminId });
+    res.json({ ok: true });
   } catch {
     res.status(500).json({ message: "Delete failed" });
   }
