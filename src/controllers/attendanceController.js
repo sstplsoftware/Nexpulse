@@ -368,7 +368,44 @@ export const getManageAttendanceAllEmployees = async (req, res) => {
 
     const adminId = resolveAdminId(req.user);
     const month = req.query.month || new Date().toISOString().slice(0, 7);
+    const employeeId = req.query.employeeId;
 
+    /* 🔥 CASE 1: SINGLE EMPLOYEE (Salary Calculation) */
+    if (employeeId && employeeId !== "all") {
+      const records = await Attendance.find({
+        adminId,
+        employeeId,
+        date: { $regex: `^${month}` },
+      }).lean();
+
+      const map = new Map();
+      records.forEach((r) => map.set(r.date, r));
+
+      const holidayMap = await getHolidayMap(adminId, month);
+
+      const [y, m] = month.split("-").map(Number);
+      const daysInMonth = new Date(y, m, 0).getDate();
+
+      const rows = [];
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = `${month}-${String(d).padStart(2, "0")}`;
+
+        if (isSunday(date)) continue;          // ❌ no deduction
+        if (holidayMap.has(date)) continue;   // ❌ no deduction
+
+        const a = map.get(date);
+
+        rows.push({
+          date,
+          status: a?.status || "Absent",
+        });
+      }
+
+      return res.json({ ok: true, rows });
+    }
+
+    /* 🔁 CASE 2: ALL EMPLOYEES (HR VIEW) */
     const employees = await User.find({
       role: "EMPLOYEE",
       createdBy: adminId,
@@ -385,7 +422,6 @@ export const getManageAttendanceAllEmployees = async (req, res) => {
     );
 
     const holidayMap = await getHolidayMap(adminId, month);
-
     const [y, m] = month.split("-").map(Number);
     const daysInMonth = new Date(y, m, 0).getDate();
 
@@ -394,31 +430,30 @@ export const getManageAttendanceAllEmployees = async (req, res) => {
     for (const emp of employees) {
       for (let d = 1; d <= daysInMonth; d++) {
         const date = `${month}-${String(d).padStart(2, "0")}`;
-        const a = attendanceMap.get(`${emp._id}-${date}`);
 
         let status = "Absent";
         if (isSunday(date)) status = "WEEK OFF";
         else if (holidayMap.has(date)) status = "HOLIDAY";
-        else if (a?.status) status = a.status;
+        else {
+          const a = attendanceMap.get(`${emp._id}-${date}`);
+          if (a?.status) status = a.status;
+        }
 
         rows.push({
-          _id: a?._id || `${emp._id}-${date}`,
           employeeId: emp,
           date,
-          clockIn: a?.clockIn || "--",
-          clockOut: a?.clockOut || "--",
-          totalHours: a?.totalHours || "--",
           status,
         });
       }
     }
 
-    res.json({ ok: true, month, rows });
+    res.json({ ok: true, rows });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to load attendance" });
   }
 };
+
 
 export const getMyMonthlyAttendance = async (req, res) => {
   try {
