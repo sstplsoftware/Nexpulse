@@ -6,73 +6,93 @@ import {
   getSettings,
   markAttendance,
   getTodayAttendance,
-
-  getManageAttendanceAllEmployees,
+  getManageAttendance,       // ✅ SINGLE unified controller
   getManageEmployeesAll,
   updateAttendance,
   deleteAttendance,
   getMyMonthlyAttendance,
-  getManageAttendanceFiltered,
 } from "../controllers/attendanceController.js";
+
 import { employeePermission } from "../middleware/permissionMiddleware.js";
 import { PERMISSIONS } from "../constants/permissions.js";
-
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// 🔐 AUTH REQUIRED FOR ALL
+// 🔐 AUTH REQUIRED
 router.use(authMiddleware);
 
 // ===============================
-// SETTINGS
+// SETTINGS (ADMIN)
 // ===============================
-router.post("/settings", saveSettings);
-router.get("/settings", getSettings);
+router.post(
+  "/settings",
+  employeePermission(PERMISSIONS.ATTENDANCE_MANAGE),
+  saveSettings
+);
 
-router.get("/my", getMyMonthlyAttendance);
-// ===============================
-// EMPLOYEE
-// ===============================
+router.get(
+  "/settings",
+  employeePermission(PERMISSIONS.ATTENDANCE_MARK),
+  getSettings
+);
 
+// ===============================
 // EMPLOYEE SELF
+// ===============================
 router.get(
   "/today",
-  employeePermission(PERMISSIONS.ATTENDANCE_VIEW),
+  employeePermission(PERMISSONS.ATTENDANCE_VIEW),
   getTodayAttendance
 );
 
 router.post(
   "/mark",
-  employeePermission(PERMISSIONS.ATTENDANCE_MARK),
+  employeePermission(PERMISSONS.ATTENDANCE_MARK),
   markAttendance
 );
 
 router.get(
-  "/manage/filtered",
-  employeePermission(PERMISSIONS.ATTENDANCE_MANAGE),
-  getManageAttendanceFiltered
+  "/my",
+  employeePermission(PERMISSONS.ATTENDANCE_VIEW),
+  getMyMonthlyAttendance
 );
 
-// ADMIN / MANAGER
+// ===============================
+// ADMIN / HR
+// ===============================
 router.get(
   "/manage",
-  employeePermission(PERMISSIONS.ATTENDANCE_MANAGE),
-  getManageAttendanceAllEmployees
+  employeePermission(PERMISSONS.ATTENDANCE_MANAGE),
+  getManageAttendance // 🔥 handles ALL / single employee / month
 );
 
-router.get("/manage/employees", getManageEmployeesAll);
+router.get(
+  "/manage/employees",
+  employeePermission(PERMISSONS.ATTENDANCE_MANAGE),
+  getManageEmployeesAll
+);
 
-// ✅ ALIAS (IMPORTANT FIX)
-// This fixes: GET /api/attendance/employees
-router.get("/employees", getManageEmployeesAll);
+// ✅ ALIAS (frontend compatibility)
+router.get(
+  "/employees",
+  employeePermission(PERMISSONS.ATTENDANCE_MANAGE),
+  getManageEmployeesAll
+);
 
 // ===============================
-// ADMIN ONLY
+// ADMIN EDIT
 // ===============================
-router.put("/manage/:id", updateAttendance);
-router.delete("/manage/:id", deleteAttendance);
+router.put(
+  "/manage/:id",
+  employeePermission(PERMISSONS.ATTENDANCE_MANAGE),
+  updateAttendance
+);
 
-
+router.delete(
+  "/manage/:id",
+  employeePermission(PERMISSONS.ATTENDANCE_MANAGE),
+  deleteAttendance
+);
 
 export default router;

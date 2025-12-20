@@ -1,3 +1,5 @@
+// C:\NexPulse\backend\src\routes\salaryRoutes.js
+
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import {
@@ -16,22 +18,29 @@ import {
 
 const router = express.Router();
 
+// 🔐 AUTH REQUIRED
 router.use(authMiddleware);
 
-// ================= EMPLOYEE =================
+/* ================= EMPLOYEE ================= */
+
+// Current month salary
 router.get("/my", getMySalary);
+
+// Last 6 months salary history
 router.get("/my/history", getSalaryHistory);
 
-// ================= VIEW =================
+/* ================= ADMIN ================= */
+
+// View salaries
 router.get("/admin", canManageSalary, getAdminSalaries);
 
-// ================= CREATE / UPDATE =================
+// Create / Update salary
 router.post("/manage", canManageSalary, createOrUpdateSalary);
 
-// ================= DELETE =================
+// Delete salary
 router.delete("/:id", canManageSalary, deleteSalary);
 
-// ================= MARK PAID =================
+// Mark PAID (ADMIN ONLY)
 router.patch("/:id/pay", canMarkSalaryPaid, markSalaryPaid);
 
 export default router;

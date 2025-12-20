@@ -1,3 +1,5 @@
+// C:\NexPulse\backend\src\routes\holidayRoutes.js
+
 import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { adminOrEmployeePermission } from "../middleware/permissionMiddleware.js";
@@ -11,23 +13,28 @@ import {
 
 const router = express.Router();
 
+// 🔐 AUTH REQUIRED
 router.use(authMiddleware);
 
-// VIEW holidays
+/* ================= VIEW ================= */
+
+// Employee + Admin can view
 router.get(
   "/",
   adminOrEmployeePermission(PERMISSIONS.HOLIDAYS_VIEW),
   getHolidays
 );
 
-// MARK holiday
+/* ================= ADMIN ================= */
+
+// Mark holiday
 router.post(
   "/",
   adminOrEmployeePermission(PERMISSIONS.HOLIDAYS_MARK),
   markHoliday
 );
 
-// DELETE holiday
+// Delete holiday
 router.delete(
   "/:id",
   adminOrEmployeePermission(PERMISSIONS.HOLIDAYS_MARK),

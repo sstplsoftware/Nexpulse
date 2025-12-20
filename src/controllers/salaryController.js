@@ -1,190 +1,250 @@
 // C:\NexPulse\backend\src\controllers\salaryController.js
 
 import Salary from "../models/Salary.js";
-import Attendance from "../models/Attendance.js";
+import User from "../models/User.js";
 import { resolveAdminId } from "../utils/resolveAdminId.js";
+import { resolveMonthlyAttendance } from "./attendanceController.js";
 
-/* =========================
-   EMPLOYEE: CURRENT MONTH
-========================= */
-export const getMySalary = async (req, res) => {
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function monthKey(d = new Date()) {
+  return d.toISOString().slice(0, 7); // YYYY-MM
+}
+
+function daysInMonth(month) {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(y, m, 0).getDate();
+}
+
+/**
+ * Salary calculation rules (SYNC WITH HR LOGIC):
+ * - Holiday: not counted as working day (no deduction)
+ * - Paid Leave: NOT deducted (treated like present day)
+ * - Absent: deducted
+ * - Punch present/late/halfday/on time: NOT deducted (for now)
+ *
+ * NOTE: You can later add "Half Day = 0.5 deduction" if you want.
+ */
+function computeSalaryFromResolvedRows({ baseSalary, month, rows }) {
+  const dim = daysInMonth(month);
+
+  // working days are those where isWorkingDay=true (holiday=false)
+  const workingDayRows = rows.filter((r) => r.isWorkingDay === true);
+
+  let absentDays = 0;
+
+  workingDayRows.forEach((r) => {
+    const s = String(r.status || "").toLowerCase();
+
+    // unpaid leave rows in resolveMonthlyAttendance are mapped to "Absent"
+    if (s === "absent") absentDays += 1;
+  });
+
+  const perDay = baseSalary / dim;
+  const deduction = Math.round(absentDays * perDay);
+  const finalSalary = Math.max(0, Math.round(baseSalary - deduction));
+
+  return {
+    totalWorkingDays: dim,
+    absentDays,
+    deduction,
+    finalSalary,
+  };
+}
+
+/* =========================================================
+   EMPLOYEE: GET MY SALARY (MONTH)
+   GET /api/salary/my?month=YYYY-MM
+========================================================= */
+export async function getMySalary(req, res) {
   try {
-    const employeeId = req.user._id;
-    const month = req.query.month;
+    const adminId = resolveAdminId(req.user);
+    const month = req.query.month || monthKey();
 
-    const salary = await Salary.findOne({ employeeId, month });
+    const salary = await Salary.findOne({
+      employeeId: req.user._id,
+      adminId,
+      month,
+    })
+      .populate("employeeId", "profile employeeId")
+      .lean();
 
-    res.json(salary || null);
+    // If not created yet, return null (frontend handles EMPTY model)
+    return res.json(salary || null);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to load salary" });
+    console.error("getMySalary error:", err);
+    return res.status(500).json({ message: "Server error" });
   }
-};
+}
 
-/* =========================
-   EMPLOYEE: HISTORY
-========================= */
-export const getSalaryHistory = async (req, res) => {
+/* =========================================================
+   EMPLOYEE: SALARY HISTORY (LAST 6)
+   GET /api/salary/my/history
+========================================================= */
+export async function getSalaryHistory(req, res) {
   try {
-    const employeeId = req.user._id;
-    const rows = await Salary.find({ employeeId }).sort({ month: -1 });
-    res.json({ rows });
-  } catch {
-    res.status(500).json({ message: "Failed to load history" });
-  }
-};
+    const adminId = resolveAdminId(req.user);
 
-/* =========================
-   ADMIN: VIEW SALARIES
-========================= */
-export const getAdminSalaries = async (req, res) => {
+    const rows = await Salary.find({
+      employeeId: req.user._id,
+      adminId,
+    })
+      .sort({ month: -1 })
+      .limit(6)
+      .lean();
+
+    return res.json({ rows });
+  } catch (err) {
+    console.error("getSalaryHistory error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
+
+/* =========================================================
+   ADMIN: LIST SALARIES (OPTIONAL employeeId FILTER)
+   GET /api/salary/admin?employeeId=...
+========================================================= */
+export async function getAdminSalaries(req, res) {
   try {
     const adminId = resolveAdminId(req.user);
     const { employeeId } = req.query;
 
-    const filter = { adminId };
-    if (employeeId && employeeId !== "all") {
-      filter.employeeId = employeeId;
-    }
+    const q = { adminId };
+    if (employeeId) q.employeeId = employeeId;
 
-    const rows = await Salary.find(filter)
-      .populate("employeeId", "profile.name")
-      .sort({ month: -1 });
+    const rows = await Salary.find(q)
+      .sort({ month: -1, createdAt: -1 })
+      .populate("employeeId", "profile employeeId")
+      .lean();
 
-    res.json(rows);
-  } catch {
-    res.status(500).json({ message: "Failed to load salaries" });
+    return res.json(rows);
+  } catch (err) {
+    console.error("getAdminSalaries error:", err);
+    return res.status(500).json({ message: "Server error" });
   }
-};
+}
 
-/* =========================
-   ADMIN: CREATE / UPDATE SALARY
-========================= */
-export const createOrUpdateSalary = async (req, res) => {
+/* =========================================================
+   ADMIN: CREATE OR UPDATE SALARY (CALCULATES FROM RESOLVED ATTENDANCE)
+   POST /api/salary/manage
+   body: { employeeId, month, baseSalary }
+========================================================= */
+export async function createOrUpdateSalary(req, res) {
   try {
     const adminId = resolveAdminId(req.user);
     const { employeeId, month, baseSalary } = req.body;
 
-    if (!employeeId || !month || !baseSalary) {
-      return res.status(400).json({ message: "Missing required fields" });
-    }
-
-    // 🔒 HARD LOCK — PAID SALARY
-    const existing = await Salary.findOne({ employeeId, month, adminId });
-    if (existing && existing.status === "PAID") {
+    if (!employeeId || !month || baseSalary == null) {
       return res.status(400).json({
-        message: "Salary already PAID and locked",
+        message: "employeeId, month, baseSalary are required",
       });
     }
 
-    // 🔥 FETCH ATTENDANCE (EXCLUDES SUNDAYS / HOLIDAYS BY DESIGN)
-    const attendance = await Attendance.find({
+    const emp = await User.findOne({
+      _id: employeeId,
+      role: "EMPLOYEE",
+      createdBy: adminId,
+    }).select("_id");
+
+    if (!emp) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    // If salary exists & PAID -> locked
+    const existing = await Salary.findOne({ employeeId, adminId, month });
+    if (existing && existing.status === "PAID") {
+      return res.status(400).json({ message: "Salary is PAID and locked" });
+    }
+
+    // ✅ Get resolved attendance (includes leave + holiday + default absent)
+    const resolvedRows = await resolveMonthlyAttendance({
       employeeId,
       adminId,
-      date: { $regex: `^${month}` },
-    }).lean();
-
-    let paidDays = 0;
-    let absentDays = 0;
-
-    attendance.forEach((a) => {
-      switch (a.status) {
-        case "Absent":
-          absentDays++;
-          break;
-
-        case "On Time":
-        case "Late":
-        case "Half Day":
-          paidDays++;
-          break;
-
-        default:
-          // Safety: treat unknown as unpaid
-          absentDays++;
-      }
+      month,
     });
 
-    const totalWorkingDays = paidDays + absentDays;
+    const calc = computeSalaryFromResolvedRows({
+      baseSalary: Number(baseSalary),
+      month,
+      rows: resolvedRows,
+    });
 
-    // 🧮 PER DAY SALARY
-    const perDay =
-      totalWorkingDays > 0 ? baseSalary / totalWorkingDays : 0;
-
-    const deduction = Math.round(absentDays * perDay);
-    const finalSalary = Math.max(
-      0,
-      Math.round(baseSalary - deduction)
-    );
-
-    // 💾 UPSERT SALARY
-    const salary = await Salary.findOneAndUpdate(
-      { employeeId, month, adminId },
-      {
-        employeeId,
-        adminId,
-        month,
-        baseSalary,
-        totalWorkingDays,
-        paidDays,
-        absentDays,
-        deduction,
-        finalSalary,
-        status: "PENDING",
-
-        // 🧾 AUDIT
-        generatedBy: req.user._id,
-        lastUpdatedBy: req.user._id,
-        lastRecalculatedAt: new Date(),
-      },
-      { upsert: true, new: true }
-    );
-
-    res.json({ ok: true, salary });
-  } catch (err) {
-    console.error("SALARY ERROR:", err);
-    res.status(500).json({ message: "Salary calculation failed" });
-  }
-};
-
-
-/* =========================
-   ADMIN: DELETE
-========================= */
-export const deleteSalary = async (req, res) => {
-  try {
-    const adminId = resolveAdminId(req.user);
-    await Salary.deleteOne({ _id: req.params.id, adminId });
-    res.json({ ok: true });
-  } catch {
-    res.status(500).json({ message: "Delete failed" });
-  }
-};
-
-/* =========================
-   ADMIN: MARK PAID
-========================= */
-export const markSalaryPaid = async (req, res) => {
-  try {
-    const adminId = resolveAdminId(req.user);
-    const salary = await Salary.findOne({
-      _id: req.params.id,
+    const payload = {
+      employeeId,
       adminId,
-    });
+      month,
+      baseSalary: Number(baseSalary),
+      totalWorkingDays: calc.totalWorkingDays,
+      absentDays: calc.absentDays,
+      deduction: calc.deduction,
+      finalSalary: calc.finalSalary,
 
-    if (!salary) {
-      return res.status(404).json({ message: "Salary not found" });
-    }
+      lastUpdatedBy: req.user._id,
+      generatedBy: req.user._id,
+    };
 
-    if (salary.status === "PAID") {
-      return res.status(400).json({ message: "Already PAID" });
-    }
+    const saved = await Salary.findOneAndUpdate(
+      { employeeId, adminId, month },
+      { $set: payload },
+      { upsert: true, new: true }
+    ).populate("employeeId", "profile employeeId");
 
-    salary.status = "PAID";
-    await salary.save();
-
-    res.json({ message: "Salary marked as PAID" });
-  } catch {
-    res.status(500).json({ message: "Failed to mark PAID" });
+    return res.json({ ok: true, salary: saved });
+  } catch (err) {
+    console.error("createOrUpdateSalary error:", err);
+    return res.status(500).json({ message: "Server error" });
   }
-};
+}
+
+/* =========================================================
+   ADMIN: DELETE SALARY (ONLY IF NOT PAID)
+   DELETE /api/salary/:id
+========================================================= */
+export async function deleteSalary(req, res) {
+  try {
+    const adminId = resolveAdminId(req.user);
+    const { id } = req.params;
+
+    const s = await Salary.findOne({ _id: id, adminId });
+    if (!s) return res.status(404).json({ message: "Salary not found" });
+
+    if (s.status === "PAID") {
+      return res.status(400).json({ message: "PAID salary cannot be deleted" });
+    }
+
+    await Salary.deleteOne({ _id: id, adminId });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("deleteSalary error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
+
+/* =========================================================
+   ADMIN ONLY: MARK SALARY PAID
+   PATCH /api/salary/:id/pay
+========================================================= */
+export async function markSalaryPaid(req, res) {
+  try {
+    const adminId = resolveAdminId(req.user);
+    const { id } = req.params;
+
+    const s = await Salary.findOne({ _id: id, adminId });
+    if (!s) return res.status(404).json({ message: "Salary not found" });
+
+    if (s.status === "PAID") {
+      return res.json({ ok: true, message: "Already PAID" });
+    }
+
+    s.status = "PAID";
+    s.lastUpdatedBy = req.user._id;
+    await s.save();
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("markSalaryPaid error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
