@@ -130,3 +130,15 @@ export const deleteSalary = async (req, res) => {
     res.status(500).json({ message: "Delete failed" });
   }
 };
+export const markSalaryPaid = async (req, res) => {
+  const salary = await Salary.findById(req.params.id);
+  if (!salary) return res.status(404).json({ message: "Not found" });
+
+  if (salary.status === "PAID")
+    return res.status(400).json({ message: "Already paid" });
+
+  salary.status = "PAID";
+  await salary.save();
+
+  res.json({ message: "Salary marked as PAID" });
+};

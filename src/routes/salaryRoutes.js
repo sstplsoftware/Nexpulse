@@ -8,6 +8,7 @@ import {
   getAdminSalaries,
   createOrUpdateSalary,
   deleteSalary,
+  markSalaryPaid,
 } from "../controllers/salaryController.js";
 
 const router = express.Router();
@@ -21,5 +22,7 @@ router.get("/my/history", getSalaryHistory);
 router.get("/admin", getAdminSalaries);
 router.post("/manage", createOrUpdateSalary);
 router.delete("/:id", deleteSalary);
+router.patch("/salary/:id/pay", authMiddleware, markSalaryPaid);
+
 
 export default router;
