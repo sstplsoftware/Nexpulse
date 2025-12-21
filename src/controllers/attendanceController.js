@@ -7,6 +7,7 @@ import Leave from "../models/Leave.js";
 import User from "../models/User.js";
 import { resolveAdminId } from "../utils/resolveAdminId.js";
 import { getDistanceMeters } from "../utils/distance.js";
+import { formatISTDate, formatISTTime } from "../utils/istDate.js";
 
 
 /* =========================================================
@@ -15,31 +16,35 @@ import { getDistanceMeters } from "../utils/distance.js";
 
 // YYYY-MM-DD
 function formatDate(d) {
-  return d.toISOString().slice(0, 10);
+   return formatISTDate(d);
 }
 
-// YYYY-MM
-function monthKey(d) {
-  return d.toISOString().slice(0, 7);
+function monthKey(d = new Date()) {
+  const ist = new Date(d.getTime() + 330 * 60 * 1000);
+  return `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, "0")}`;
 }
+
 
 function getAllDatesOfMonth(month) {
   const [y, m] = month.split("-").map(Number);
-  const days = new Date(y, m, 0).getDate();
+  const days = new Date(y, m, 0, 12).getDate(); // noon = safe
   const arr = [];
   for (let i = 1; i <= days; i++) {
     arr.push(`${month}-${String(i).padStart(2, "0")}`);
   }
   return arr;
 }
+
 function isSunday(dateStr) {
-  const d = new Date(dateStr);
-  return d.getDay() === 0; // Sunday
+  const d = new Date(`${dateStr}T12:00:00`);
+  return d.getDay() === 0;
 }
+
 function isSaturday(dateStr) {
-  const d = new Date(dateStr);
-  return d.getDay() === 6; // Saturday
+  const d = new Date(`${dateStr}T12:00:00`);
+  return d.getDay() === 6;
 }
+
 function timeToMinutes(t) {
   if (!t) return 0;
   const [h, m] = t.split(":").map(Number);
@@ -92,13 +97,15 @@ export async function resolveMonthlyAttendance({
 
   const leaveMap = new Map();
   leaves.forEach((l) => {
-    let d = new Date(l.fromDate);
-    const end = new Date(l.toDate);
+    let d = new Date(`${l.fromDate}T12:00:00`);
+const end = new Date(`${l.toDate}T12:00:00`);
     while (d <= end) {
       leaveMap.set(formatDate(d), l);
       d.setDate(d.getDate() + 1);
     }
   });
+// 🔥 Monthly late counter (RESET PER MONTH)
+let lateCount = 0;
 
   return dates.map((date) => {
     const sunday = isSunday(date);
@@ -283,7 +290,7 @@ export async function markAttendance(req, res) {
   const adminId = resolveAdminId(user);
   const { status, lat, lng } = req.body;
 
-  const today = formatDate(new Date());
+  const today = formatISTDate();
 
   let record = await Attendance.findOne({
     employeeId: user._id,
@@ -300,23 +307,18 @@ export async function markAttendance(req, res) {
   }
 
   if (status === "IN") {
-    record.clockIn = new Date().toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    record.latIn = lat;
-    record.lngIn = lng;
-    record.status = "Present";
-  }
+  record.clockIn = formatISTTime(); // ✅ IST SAFE
+  record.latIn = lat;
+  record.lngIn = lng;
+  record.status = "Present";
+}
 
-  if (status === "OUT") {
-    record.clockOut = new Date().toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    record.latOut = lat;
-    record.lngOut = lng;
-  }
+if (status === "OUT") {
+  record.clockOut = formatISTTime(); // ✅ IST SAFE
+  record.latOut = lat;
+  record.lngOut = lng;
+}
+
 
   await record.save();
   res.json({ ok: true });
@@ -405,13 +407,14 @@ export async function getManageEmployeesAll(req, res) {
 export async function updateAttendance(req, res) {
   const { id } = req.params;
 
-  const allowed = [
+ const allowed = [
   "Present",
   "Late",
   "Absent",
   "On Time",
   "Half Day (First Half)",
   "Half Day (Second Half)",
+  "Half Day (Auto Late)",
 ];
 
 
