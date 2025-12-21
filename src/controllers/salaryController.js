@@ -31,27 +31,27 @@ function computeSalaryFromResolvedRows({ baseSalary, month, rows }) {
   const dim = daysInMonth(month);
 
   // working days are those where isWorkingDay=true (holiday=false)
-  const workingDayRows = rows.filter((r) => r.isWorkingDay === true);
+ const workingDayRows = rows.filter((r) => r.isWorkingDay === true);
 
-  let absentDays = 0;
+let absentDays = 0;
+workingDayRows.forEach((r) => {
+  const s = String(r.status || "").toLowerCase();
+  if (s === "absent") absentDays += 1;
+});
 
-  workingDayRows.forEach((r) => {
-    const s = String(r.status || "").toLowerCase();
+// ✅ salary per-day should be based on WORKING DAYS (excluding Sundays + holidays)
+const totalWorkingDays = workingDayRows.length || 1;
+const perDay = baseSalary / totalWorkingDays;
 
-    // unpaid leave rows in resolveMonthlyAttendance are mapped to "Absent"
-    if (s === "absent") absentDays += 1;
-  });
+const deduction = Math.round(absentDays * perDay);
+const finalSalary = Math.max(0, Math.round(baseSalary - deduction));
 
-  const perDay = baseSalary / dim;
-  const deduction = Math.round(absentDays * perDay);
-  const finalSalary = Math.max(0, Math.round(baseSalary - deduction));
-
-  return {
-    totalWorkingDays: dim,
-    absentDays,
-    deduction,
-    finalSalary,
-  };
+return {
+  totalWorkingDays,
+  absentDays,
+  deduction,
+  finalSalary,
+};
 }
 
 /* =========================================================

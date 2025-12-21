@@ -31,6 +31,11 @@ function getAllDatesOfMonth(month) {
   }
   return arr;
 }
+function isSunday(dateStr) {
+  const d = new Date(dateStr);
+  return d.getDay() === 0; // Sunday
+}
+
 
 /* =========================================================
    CORE RESOLVER (SINGLE SOURCE OF TRUTH)
@@ -115,14 +120,28 @@ export async function resolveMonthlyAttendance({
       };
     }
 
-    // 4️⃣ Default absent
-    return {
-      date,
-      status: "Absent",
-      isWorkingDay: true,
-      employee,
-      source: "SYSTEM",
-    };
+    // 🔥 SUNDAY CHECK (ADD THIS HERE)
+const sunday = isSunday(date);
+
+// 4️⃣ Sunday (NON-WORKING DAY)
+if (sunday) {
+  return {
+    date,
+    status: "Sunday",
+    isWorkingDay: false,
+    employee,
+    source: "SYSTEM",
+  };
+}
+
+// 5️⃣ Default absent (ONLY WORKING DAYS)
+return {
+  date,
+  status: "Absent",
+  isWorkingDay: true,
+  employee,
+  source: "SYSTEM",
+};
   });
 }
 
