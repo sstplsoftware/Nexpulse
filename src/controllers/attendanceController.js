@@ -164,9 +164,18 @@ if (a) {
   const inMin = a.clockIn ? timeToMinutes(a.clockIn) : null;
   const outMin = a.clockOut ? timeToMinutes(a.clockOut) : null;
 
-  const officeStartMin = timeToMinutes(settings?.officeStart);
-  const officeEndMin = timeToMinutes(settings?.officeEnd);
-  const halfDayMin = timeToMinutes(settings?.halfDayTime);
+  const officeStartMin = settings?.officeStart
+  ? timeToMinutes(settings.officeStart)
+  : null;
+
+const officeEndMin = settings?.officeEnd
+  ? timeToMinutes(settings.officeEnd)
+  : null;
+
+const halfDayMin = settings?.halfDayTime
+  ? timeToMinutes(settings.halfDayTime)
+  : null;
+
   const lateMarginMin = settings?.lateMarginMinutes || 0;
 
   /* ==========================
@@ -187,32 +196,37 @@ if (a) {
     }
   }
 
-  /* ==========================
-     🔥 LATE + AUTO HALF-DAY
-  ========================== */
-  if (
-    !halfDay &&
-    inMin !== null &&
-    officeStartMin !== null &&
-    inMin > officeStartMin + lateMarginMin
-  ) {
-    lateCount += 1;
+ /* ==========================
+   🔥 LATE + AUTO HALF-DAY
+========================== */
+if (
+  !halfDay &&
+  inMin !== null &&
+  officeStartMin !== null &&
+  inMin > officeStartMin + lateMarginMin
+) {
+  lateCount += 1;
 
-    // 🟡 Grace late days
-    if (lateCount <= (settings?.graceLateDays || 0)) {
-      status = "Late";
-    }
-    // 🟠 Auto Half-Day after limit
-    else if (
-      settings?.lateToHalfDayAfter &&
-      lateCount >= settings.lateToHalfDayAfter
-    ) {
-      status = "Half Day (Auto Late)";
-      halfDay = true;
-    } else {
-      status = "Late";
-    }
+  // 🟡 Grace late days (no deduction)
+  if (lateCount <= (settings?.graceLateDays || 0)) {
+    status = "Late";
   }
+
+  // 🟠 Auto Half-Day after X lates
+  else if (
+    settings?.lateToHalfDayAfter &&
+    lateCount >= settings.lateToHalfDayAfter
+  ) {
+    status = "Half Day (Auto Late)";
+    halfDay = true;
+  }
+
+  // 🔴 Normal late (after grace but before half-day limit)
+  else {
+    status = "Late";
+  }
+}
+
 
   return {
     ...a,
