@@ -51,6 +51,20 @@ function timeToMinutes(t) {
   return h * 60 + m;
 }
 
+function isInsideAnyZone({ lat, lng, zones = [] }) {
+  if (!zones.length) return true; // 🔥 no zones = no restriction
+
+  return zones.some((z) => {
+    const distance = getDistanceMeters(
+      lat,
+      lng,
+      z.lat,
+      z.lng
+    );
+
+    return distance <= (z.radius || 100);
+  });
+}
 
 
 /* =========================================================
@@ -290,6 +304,30 @@ export async function markAttendance(req, res) {
   const adminId = resolveAdminId(user);
   const { status, lat, lng } = req.body;
 
+  // 🔴 VALIDATE GPS FIRST
+  if (lat == null || lng == null) {
+    return res.status(400).json({
+      message: "Location permission required",
+    });
+  }
+
+  // 🔥 LOAD SETTINGS FOR ZONES
+  const settings = await AttendanceSettings.findOne({ adminId }).lean();
+
+  // 🔥 ZONE CHECK (MAIN FIX)
+  const allowed = isInsideAnyZone({
+    lat,
+    lng,
+    zones: settings?.zones || [],
+  });
+
+  if (!allowed) {
+    return res.status(403).json({
+      message: "You are outside the allowed office location",
+    });
+  }
+
+  // ✅ IST DATE
   const today = formatISTDate();
 
   let record = await Attendance.findOne({
@@ -307,22 +345,23 @@ export async function markAttendance(req, res) {
   }
 
   if (status === "IN") {
-  record.clockIn = formatISTTime(); // ✅ IST SAFE
-  record.latIn = lat;
-  record.lngIn = lng;
-  record.status = "Present";
-}
+    record.clockIn = formatISTTime();
+    record.latIn = lat;
+    record.lngIn = lng;
+    record.status = "Present";
+  }
 
-if (status === "OUT") {
-  record.clockOut = formatISTTime(); // ✅ IST SAFE
-  record.latOut = lat;
-  record.lngOut = lng;
-}
-
+  if (status === "OUT") {
+    record.clockOut = formatISTTime();
+    record.latOut = lat;
+    record.lngOut = lng;
+  }
 
   await record.save();
+
   res.json({ ok: true });
 }
+
 
 /* =========================================================
    TODAY ATTENDANCE
