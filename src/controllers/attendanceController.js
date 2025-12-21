@@ -110,15 +110,35 @@ export async function resolveMonthlyAttendance({
     }
 
     // 3️⃣ Attendance punch
-    const a = attendanceMap.get(date);
-    if (a) {
-      return {
-        ...a,
-        employee,
-        isWorkingDay: true,
-        source: "PUNCH",
-      };
+    // 3️⃣ Attendance punch (WITH HALF DAY LOGIC)
+const a = attendanceMap.get(date);
+if (a) {
+  let status = a.status || "Present";
+
+  if (a.clockIn && a.clockOut && settings?.halfDayTime) {
+    const out = a.clockOut;        // "13:05"
+    const half = settings.halfDayTime; // "13:00"
+    const end = settings.officeEnd;    // "17:30"
+
+    if (out < half) {
+      status = "Half Day (First Half)";
+    } else if (out < end) {
+      status = "Half Day (Second Half)";
+    } else {
+      status = "Present";
     }
+  }
+
+  return {
+    ...a,
+    status,
+    isWorkingDay: true,
+    halfDay:
+      status.startsWith("Half Day") ? true : false,
+    employee,
+    source: "PUNCH",
+  };
+}
 
     // 🔥 SUNDAY CHECK (ADD THIS HERE)
 const sunday = isSunday(date);

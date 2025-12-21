@@ -27,32 +27,50 @@ function daysInMonth(month) {
  *
  * NOTE: You can later add "Half Day = 0.5 deduction" if you want.
  */
-function computeSalaryFromResolvedRows({ baseSalary, month, rows }) {
-  const dim = daysInMonth(month);
+function computeSalaryFromResolvedRows({ baseSalary, month, rows, settings }) {
+  // Only count actual working days (no Sunday, no holiday)
+  const workingDayRows = rows.filter((r) => r.isWorkingDay === true);
 
-  // working days are those where isWorkingDay=true (holiday=false)
- const workingDayRows = rows.filter((r) => r.isWorkingDay === true);
+  let absentDays = 0;
+  let halfDays = 0;
 
-let absentDays = 0;
-workingDayRows.forEach((r) => {
-  const s = String(r.status || "").toLowerCase();
-  if (s === "absent") absentDays += 1;
-});
+  workingDayRows.forEach((r) => {
+    const status = String(r.status || "").toLowerCase();
 
-// ✅ salary per-day should be based on WORKING DAYS (excluding Sundays + holidays)
-const totalWorkingDays = workingDayRows.length || 1;
-const perDay = baseSalary / totalWorkingDays;
+    if (status === "absent") {
+      absentDays += 1;
+    }
 
-const deduction = Math.round(absentDays * perDay);
-const finalSalary = Math.max(0, Math.round(baseSalary - deduction));
+    // 🔥 Half day = 0.5 deduction (configurable)
+    if (
+      status.includes("half day") &&
+      settings?.halfDayDeduction !== false
+    ) {
+      halfDays += 0.5;
+    }
+  });
 
-return {
-  totalWorkingDays,
-  absentDays,
-  deduction,
-  finalSalary,
-};
+  // ✅ salary per-day based on ACTUAL working days
+  const totalWorkingDays = workingDayRows.length || 1;
+  const perDaySalary = baseSalary / totalWorkingDays;
+
+  const totalDeductionDays = absentDays + halfDays;
+  const deduction = Math.round(totalDeductionDays * perDaySalary);
+
+  const finalSalary = Math.max(
+    0,
+    Math.round(baseSalary - deduction)
+  );
+
+  return {
+    totalWorkingDays,
+    absentDays,
+    halfDays,
+    deduction,
+    finalSalary,
+  };
 }
+
 
 /* =========================================================
    EMPLOYEE: GET MY SALARY (MONTH)
@@ -165,12 +183,14 @@ export async function createOrUpdateSalary(req, res) {
       month,
     });
 
-    const calc = computeSalaryFromResolvedRows({
-      baseSalary: Number(baseSalary),
-      month,
-      rows: resolvedRows,
-    });
+    const settings = await AttendanceSettings.findOne({ adminId }).lean();
 
+const calc = computeSalaryFromResolvedRows({
+  baseSalary: Number(baseSalary),
+  month,
+  rows: resolvedRows,
+  settings,
+});
     const payload = {
       employeeId,
       adminId,
