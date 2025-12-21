@@ -161,8 +161,8 @@ if (a) {
   let status = "Present";
   let halfDay = false;
 
-  const inMin = timeToMinutes(a.clockIn);
-  const outMin = timeToMinutes(a.clockOut);
+  const inMin = a.clockIn ? timeToMinutes(a.clockIn) : null;
+  const outMin = a.clockOut ? timeToMinutes(a.clockOut) : null;
 
   const officeStartMin = timeToMinutes(settings?.officeStart);
   const officeEndMin = timeToMinutes(settings?.officeEnd);
@@ -170,25 +170,13 @@ if (a) {
   const lateMarginMin = settings?.lateMarginMinutes || 0;
 
   /* ==========================
-     🔥 LATE LOGIC (MISSING)
+     HALF DAY (TIME BASED)
   ========================== */
   if (
-    a.clockIn &&
-    officeStartMin &&
-    inMin > officeStartMin + lateMarginMin
-  ) {
-    status = "Late";
-  }
-
-  /* ==========================
-     HALF DAY (OVERRIDES LATE)
-  ========================== */
-  if (
-    settings &&
-    settings.halfDayDeduction === true &&
-    settings.halfDayTime &&
-    settings.officeEnd &&
-    a.clockOut
+    settings?.halfDayDeduction === true &&
+    outMin !== null &&
+    halfDayMin &&
+    officeEndMin
   ) {
     if (outMin < halfDayMin) {
       status = "Half Day (First Half)";
@@ -199,6 +187,33 @@ if (a) {
     }
   }
 
+  /* ==========================
+     🔥 LATE + AUTO HALF-DAY
+  ========================== */
+  if (
+    !halfDay &&
+    inMin !== null &&
+    officeStartMin !== null &&
+    inMin > officeStartMin + lateMarginMin
+  ) {
+    lateCount += 1;
+
+    // 🟡 Grace late days
+    if (lateCount <= (settings?.graceLateDays || 0)) {
+      status = "Late";
+    }
+    // 🟠 Auto Half-Day after limit
+    else if (
+      settings?.lateToHalfDayAfter &&
+      lateCount >= settings.lateToHalfDayAfter
+    ) {
+      status = "Half Day (Auto Late)";
+      halfDay = true;
+    } else {
+      status = "Late";
+    }
+  }
+
   return {
     ...a,
     status,
@@ -206,9 +221,9 @@ if (a) {
     halfDay,
     employee,
     source: "PUNCH",
+    lateCount, // optional (useful for UI)
   };
 }
-
 
 
 /* ============================

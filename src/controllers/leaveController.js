@@ -140,32 +140,55 @@ export async function updateLeaveStatus(req, res) {
 export async function getLeaveBalance(req, res) {
   try {
     const adminId = resolveAdminId(req.user);
+    const employeeId = req.user._id;
 
-    const approved = await Leave.find({
-      employeeId: req.user._id,
+    const now = new Date();
+    const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM
+    const currentYear = now.getFullYear();
+
+    const approvedLeaves = await Leave.find({
+      employeeId,
       adminId,
       status: "APPROVED",
-      isPaid: true,
     }).lean();
 
-    let CL = 0;
-    let SL = 0;
+    let usedCLThisMonth = 0;
+    let usedSLThisMonth = 0;
+    let unusedCLCarry = 0;
 
-    approved.forEach((l) => {
-      if (l.type === "CL") CL += l.days;
-      if (l.type === "SL") SL += l.days;
+    approvedLeaves.forEach((l) => {
+      const leaveMonth = l.fromDate.slice(0, 7);
+      const leaveYear = new Date(l.fromDate).getFullYear();
+
+      // Monthly usage
+      if (leaveMonth === currentMonth) {
+        if (l.type === "CL") usedCLThisMonth += l.days;
+        if (l.type === "SL") usedSLThisMonth += l.days;
+      }
+
+      // Carry-forward CL (unused months in same year)
+      if (
+        l.type === "CL" &&
+        leaveYear === currentYear &&
+        leaveMonth < currentMonth
+      ) {
+        unusedCLCarry += Math.max(0, 1 - l.days);
+      }
     });
 
-    // You can enhance this later (monthly reset rules etc.)
+    const CL = Math.max(0, unusedCLCarry + (1 - usedCLThisMonth));
+    const SL = Math.max(0, 1 - usedSLThisMonth);
+
     return res.json({
-      CL: Math.max(0, 12 - CL),
-      SL: Math.max(0, 8 - SL),
+      CL,
+      SL,
     });
   } catch (err) {
     console.error("getLeaveBalance error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 }
+
 
 /* =====================================================
    ADMIN: LEAVE HISTORY
