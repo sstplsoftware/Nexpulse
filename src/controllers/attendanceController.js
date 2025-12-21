@@ -8,6 +8,7 @@ import User from "../models/User.js";
 import { resolveAdminId } from "../utils/resolveAdminId.js";
 import { getDistanceMeters } from "../utils/distance.js";
 
+
 /* =========================================================
    INTERNAL HELPERS
 ========================================================= */
@@ -35,6 +36,16 @@ function isSunday(dateStr) {
   const d = new Date(dateStr);
   return d.getDay() === 0; // Sunday
 }
+function isSaturday(dateStr) {
+  const d = new Date(dateStr);
+  return d.getDay() === 6; // Saturday
+}
+function timeToMinutes(t) {
+  if (!t) return 0;
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
 
 
 /* =========================================================
@@ -47,6 +58,9 @@ export async function resolveMonthlyAttendance({
   month,
 }) {
   const dates = getAllDatesOfMonth(month);
+
+  // 🔥 LOAD SETTINGS (WAS MISSING → CAUSED 500 ERROR)
+  const settings = await AttendanceSettings.findOne({ adminId }).lean();
 
   const [attendance, holidays, leaves, employee] = await Promise.all([
     Attendance.find({
@@ -87,17 +101,47 @@ export async function resolveMonthlyAttendance({
   });
 
   return dates.map((date) => {
-    // 1️⃣ Holiday
+    const sunday = isSunday(date);
+const saturday = isSaturday(date);
+
+/* 0️⃣ SUNDAY (ALWAYS NON-WORKING) */
+if (sunday) {
+  return {
+    date,
+    status: "Sunday",
+    isWorkingDay: false,
+    employee,
+    source: "SYSTEM",
+  };
+}
+
+/* 0️⃣ SATURDAY (OPTIONAL WORKING) */
+if (saturday && settings?.saturdayWorking === false) {
+  return {
+    date,
+    status: "Saturday Off",
+    isWorkingDay: false,
+    employee,
+    source: "SYSTEM",
+  };
+}
+
+    /* ============================
+       1️⃣ HOLIDAY
+    ============================ */
     if (holidaySet.has(date)) {
       return {
         date,
         status: "Holiday",
         isWorkingDay: false,
         employee,
+        source: "HOLIDAY",
       };
     }
 
-    // 2️⃣ Leave
+    /* ============================
+       2️⃣ LEAVE
+    ============================ */
     const leave = leaveMap.get(date);
     if (leave) {
       return {
@@ -109,23 +153,35 @@ export async function resolveMonthlyAttendance({
       };
     }
 
-    // 3️⃣ Attendance punch
-    // 3️⃣ Attendance punch (WITH HALF DAY LOGIC)
+   /* ============================
+   3️⃣ ATTENDANCE PUNCH
+============================ */
 const a = attendanceMap.get(date);
 if (a) {
   let status = a.status || "Present";
+  let halfDay = false;
 
-  if (a.clockIn && a.clockOut && settings?.halfDayTime) {
-    const out = a.clockOut;        // "13:05"
-    const half = settings.halfDayTime; // "13:00"
-    const end = settings.officeEnd;    // "17:30"
+  // ✅ HALF DAY CALCULATION (SAFE + GUARDED)
+  if (
+    settings &&
+    settings.halfDayDeduction === true &&
+    settings.halfDayTime &&
+    settings.officeEnd &&
+    a.clockOut
+  ) {
+    const outMin = timeToMinutes(a.clockOut);
+    const halfMin = timeToMinutes(settings.halfDayTime);
+    const endMin = timeToMinutes(settings.officeEnd);
 
-    if (out < half) {
+    if (outMin < halfMin) {
       status = "Half Day (First Half)";
-    } else if (out < end) {
+      halfDay = true;
+    } else if (outMin < endMin) {
       status = "Half Day (Second Half)";
+      halfDay = true;
     } else {
       status = "Present";
+      halfDay = false;
     }
   }
 
@@ -133,28 +189,16 @@ if (a) {
     ...a,
     status,
     isWorkingDay: true,
-    halfDay:
-      status.startsWith("Half Day") ? true : false,
+    halfDay,
     employee,
     source: "PUNCH",
   };
 }
 
-    // 🔥 SUNDAY CHECK (ADD THIS HERE)
-const sunday = isSunday(date);
 
-// 4️⃣ Sunday (NON-WORKING DAY)
-if (sunday) {
-  return {
-    date,
-    status: "Sunday",
-    isWorkingDay: false,
-    employee,
-    source: "SYSTEM",
-  };
-}
-
-// 5️⃣ Default absent (ONLY WORKING DAYS)
+/* ============================
+   4️⃣ DEFAULT ABSENT (WORKING DAY)
+============================ */
 return {
   date,
   status: "Absent",
@@ -162,8 +206,10 @@ return {
   employee,
   source: "SYSTEM",
 };
+
   });
 }
+
 
 /* =========================================================
    SETTINGS
@@ -257,17 +303,23 @@ export async function getTodayAttendance(req, res) {
 ========================================================= */
 
 export async function getMyMonthlyAttendance(req, res) {
-  const adminId = resolveAdminId(req.user);
-  const month = req.query.month || monthKey(new Date());
+  try {
+    const adminId = resolveAdminId(req.user);
+    const month = req.query.month || monthKey(new Date());
 
-  const rows = await resolveMonthlyAttendance({
-    employeeId: req.user._id,
-    adminId,
-    month,
-  });
+    const rows = await resolveMonthlyAttendance({
+      employeeId: req.user._id,
+      adminId,
+      month,
+    });
 
-  res.json({ rows });
+    return res.json({ rows });
+  } catch (err) {
+    console.error("getMyMonthlyAttendance error:", err);
+    return res.status(500).json({ message: "Failed to load attendance" });
+  }
 }
+
 
 /* =========================================================
    ADMIN – SINGLE EMPLOYEE (MAIN FIX)
@@ -312,7 +364,15 @@ export async function getManageEmployeesAll(req, res) {
 export async function updateAttendance(req, res) {
   const { id } = req.params;
 
-  const allowed = ["Present", "Late", "Half Day", "Absent", "On Time"];
+  const allowed = [
+  "Present",
+  "Late",
+  "Absent",
+  "On Time",
+  "Half Day (First Half)",
+  "Half Day (Second Half)",
+];
+
 
   if (req.body.status && !allowed.includes(req.body.status)) {
     return res.status(400).json({ message: "Invalid status" });
