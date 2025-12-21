@@ -207,12 +207,11 @@ if (
 ) {
   lateCount += 1;
 
-  // 🟡 Grace late days (no deduction)
+  // 🟡 Grace late days (still marked Late, no penalty)
   if (lateCount <= (settings?.graceLateDays || 0)) {
     status = "Late";
   }
-
-  // 🟠 Auto Half-Day after X lates
+  // 🟠 Auto Half-Day after limit
   else if (
     settings?.lateToHalfDayAfter &&
     lateCount >= settings.lateToHalfDayAfter
@@ -220,13 +219,11 @@ if (
     status = "Half Day (Auto Late)";
     halfDay = true;
   }
-
-  // 🔴 Normal late (after grace but before half-day limit)
+  // 🟡 Normal late
   else {
     status = "Late";
   }
 }
-
 
   return {
     ...a,
