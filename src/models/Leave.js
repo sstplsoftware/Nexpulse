@@ -30,9 +30,23 @@ const leaveSchema = new mongoose.Schema(
       required: true,
     },
 
+    // 🔥 SUPPORTS 0.5 FOR HALF DAY
     days: {
       type: Number,
       required: true,
+    },
+
+    // 🔥 HALF DAY SUPPORT
+    isHalfDay: {
+      type: Boolean,
+      default: false,
+    },
+
+    // FIRST = Morning | SECOND = Afternoon
+    halfType: {
+      type: String,
+      enum: ["FIRST", "SECOND"],
+      default: null,
     },
 
     isPaid: {

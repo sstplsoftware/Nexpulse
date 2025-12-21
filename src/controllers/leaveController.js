@@ -13,6 +13,7 @@ function daysBetween(from, to) {
   return Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)) + 1;
 }
 
+
 /* =====================================================
    EMPLOYEE: REQUEST LEAVE
 ===================================================== */
@@ -25,21 +26,39 @@ export async function requestLeave(req, res) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    const computedDays = daysBetween(from, to);
-    if (computedDays !== days) {
-      return res.status(400).json({ message: "Invalid day count" });
-    }
+   const computedDays = daysBetween(from, to);
+
+// ✅ HALF DAY VALIDATION
+if (days === 0.5) {
+  if (from !== to) {
+    return res.status(400).json({
+      message: "Half day leave must be for a single date",
+    });
+  }
+}
+// ✅ FULL DAY / MULTI DAY VALIDATION
+else if (computedDays !== days) {
+  return res.status(400).json({
+    message: "Invalid day count",
+  });
+}
+
 
     const leave = await Leave.create({
-      employeeId: req.user._id,
-      adminId,
-      type,
-      fromDate: from,
-      toDate: to,
-      days,
-      isPaid,
-      reason,
-    });
+  employeeId: req.user._id,
+  adminId,
+  type,
+  fromDate: from,
+  toDate: to,
+  days,
+  isPaid,
+  reason,
+
+  // 🔥 NEW (OPTIONAL FIELDS)
+  halfDay: days === 0.5,
+  halfType: req.body.halfType || null, // FIRST | SECOND
+});
+
 
     return res.json({ ok: true, leave });
   } catch (err) {
