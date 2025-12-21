@@ -17,14 +17,18 @@ const attendanceSettingsSchema = new mongoose.Schema(
 
     officeStart: { type: String, required: true }, // "09:00"
     officeEnd: { type: String, required: true },   // "17:30"
-    lateMarginMinutes: { type: Number, default: 15 },
+    lateMarginMinutes: { type: Number, default: 15 , min:0},
     lateMarginDays: { type: Number, default: 0 },
 
     halfDayTime: { type: String, required: true }, // "13:00"
+    graceLateDays: { type: Number, default: 3 , min:0 },     // first X lates ignored
+    lateToHalfDayAfter: { type: Number, default: 3 , min:0}, // after X lates → half day
+
 
     // 🔥 NEW FLAGS (safe defaults)
     saturdayWorking: { type: Boolean, default: true },
     halfDayDeduction: { type: Boolean, default: true },
+    
 
     zones: { type: [zoneSchema], default: [] },
   },

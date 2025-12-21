@@ -158,10 +158,31 @@ if (saturday && settings?.saturdayWorking === false) {
 ============================ */
 const a = attendanceMap.get(date);
 if (a) {
-  let status = a.status || "Present";
+  let status = "Present";
   let halfDay = false;
 
-  // ✅ HALF DAY CALCULATION (SAFE + GUARDED)
+  const inMin = timeToMinutes(a.clockIn);
+  const outMin = timeToMinutes(a.clockOut);
+
+  const officeStartMin = timeToMinutes(settings?.officeStart);
+  const officeEndMin = timeToMinutes(settings?.officeEnd);
+  const halfDayMin = timeToMinutes(settings?.halfDayTime);
+  const lateMarginMin = settings?.lateMarginMinutes || 0;
+
+  /* ==========================
+     🔥 LATE LOGIC (MISSING)
+  ========================== */
+  if (
+    a.clockIn &&
+    officeStartMin &&
+    inMin > officeStartMin + lateMarginMin
+  ) {
+    status = "Late";
+  }
+
+  /* ==========================
+     HALF DAY (OVERRIDES LATE)
+  ========================== */
   if (
     settings &&
     settings.halfDayDeduction === true &&
@@ -169,19 +190,12 @@ if (a) {
     settings.officeEnd &&
     a.clockOut
   ) {
-    const outMin = timeToMinutes(a.clockOut);
-    const halfMin = timeToMinutes(settings.halfDayTime);
-    const endMin = timeToMinutes(settings.officeEnd);
-
-    if (outMin < halfMin) {
+    if (outMin < halfDayMin) {
       status = "Half Day (First Half)";
       halfDay = true;
-    } else if (outMin < endMin) {
+    } else if (outMin < officeEndMin) {
       status = "Half Day (Second Half)";
       halfDay = true;
-    } else {
-      status = "Present";
-      halfDay = false;
     }
   }
 
@@ -194,6 +208,7 @@ if (a) {
     source: "PUNCH",
   };
 }
+
 
 
 /* ============================
