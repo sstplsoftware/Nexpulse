@@ -58,6 +58,13 @@ const userSchema = new mongoose.Schema(
     otherEmail: { type: String, default: "" },
     department: { type: String, default: "" },
     dateOfJoining: { type: Date, default: null },
+
+    attendancePolicy: {
+  type: String,
+  enum: ["ANYWHERE", "OFFICE_ONLY"],
+  default: "OFFICE_ONLY",
+},
+
   },
   { timestamps: true }
 );

@@ -15,6 +15,7 @@ import {
   getManageEmployeesAll,
   updateAttendance,
   deleteAttendance,
+  updateEmployeeAttendancePolicy,
 } from "../controllers/attendanceController.js";
 
 const router = express.Router();
@@ -59,9 +60,18 @@ router.get(
 // Employee dropdown
 router.get("/employees", getManageEmployeesAll);
 
+router.post(
+  "/employee-policy",
+  employeePermission(PERMISSIONS.ATTENDANCE_MANAGE),
+  updateEmployeeAttendancePolicy
+);
+
 /* ================= ADMIN ONLY ================= */
 
 router.put("/manage/:id", updateAttendance);
 router.delete("/manage/:id", deleteAttendance);
+
+
+
 
 export default router;

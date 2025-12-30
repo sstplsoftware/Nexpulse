@@ -300,68 +300,103 @@ export async function getSettings(req, res) {
 ========================================================= */
 
 export async function markAttendance(req, res) {
-  const user = req.user;
-  const adminId = resolveAdminId(user);
-  const { status, lat, lng } = req.body;
+  try {
+    const user = req.user;
+    const adminId = resolveAdminId(user);
+    const { status, lat, lng } = req.body;
 
-  // 🔴 VALIDATE GPS FIRST
-  if (lat == null || lng == null) {
-    return res.status(400).json({
-      message: "Location permission required",
-    });
-  }
+    /* ================= VALIDATION ================= */
+    if (!status || !["IN", "OUT"].includes(status)) {
+      return res.status(400).json({ message: "Invalid attendance status" });
+    }
 
-  // 🔥 LOAD SETTINGS FOR ZONES
-  const settings = await AttendanceSettings.findOne({ adminId }).lean();
+    if (lat == null || lng == null) {
+      return res.status(400).json({
+        message: "Location permission required",
+      });
+    }
 
-  // 🔥 ZONE CHECK (MAIN FIX)
-  const allowed = isInsideAnyZone({
-    lat,
-    lng,
-    zones: settings?.zones || [],
-  });
+    /* ================= LOAD SETTINGS ================= */
+    const settings = await AttendanceSettings.findOne({ adminId }).lean();
+    if (!settings) {
+      return res.status(400).json({
+        message: "Attendance settings not configured by admin",
+      });
+    }
 
-  if (!allowed) {
-    return res.status(403).json({
-      message: "You are outside the allowed office location",
-    });
-  }
+    /* ================= WFH / ZONE POLICY ================= */
+    if (user.attendancePolicy !== "ANYWHERE") {
+      const allowed = isInsideAnyZone({
+        lat,
+        lng,
+        zones: settings.zones || [],
+      });
 
-  // ✅ IST DATE
-  const today = formatISTDate();
+      if (!allowed) {
+        return res.status(403).json({
+          message: "You are outside the allowed office location",
+        });
+      }
+    }
 
-  let record = await Attendance.findOne({
-    employeeId: user._id,
-    adminId,
-    date: today,
-  });
+    /* ================= DATE ================= */
+    const today = formatISTDate();
 
-  if (!record) {
-    record = new Attendance({
+    let record = await Attendance.findOne({
       employeeId: user._id,
       adminId,
       date: today,
     });
+
+    if (!record) {
+      record = new Attendance({
+        employeeId: user._id,
+        adminId,
+        date: today,
+      });
+    }
+
+    /* ================= PUNCH LOGIC ================= */
+    if (status === "IN") {
+      if (record.clockIn) {
+        return res.status(400).json({
+          message: "Already punched in for today",
+        });
+      }
+
+      record.clockIn = formatISTTime();
+      record.latIn = lat;
+      record.lngIn = lng;
+      record.status = "Present";
+    }
+
+    if (status === "OUT") {
+      if (!record.clockIn) {
+        return res.status(400).json({
+          message: "Punch-in required before punch-out",
+        });
+      }
+
+      if (record.clockOut) {
+        return res.status(400).json({
+          message: "Already punched out for today",
+        });
+      }
+
+      record.clockOut = formatISTTime();
+      record.latOut = lat;
+      record.lngOut = lng;
+    }
+
+    await record.save();
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("markAttendance error:", err);
+    return res.status(500).json({
+      message: "Failed to mark attendance",
+    });
   }
-
-  if (status === "IN") {
-    record.clockIn = formatISTTime();
-    record.latIn = lat;
-    record.lngIn = lng;
-    record.status = "Present";
-  }
-
-  if (status === "OUT") {
-    record.clockOut = formatISTTime();
-    record.latOut = lat;
-    record.lngOut = lng;
-  }
-
-  await record.save();
-
-  res.json({ ok: true });
 }
-
 
 /* =========================================================
    TODAY ATTENDANCE
@@ -429,14 +464,29 @@ export async function getManageAttendanceFiltered(req, res) {
 ========================================================= */
 
 export async function getManageEmployeesAll(req, res) {
-  const adminId = resolveAdminId(req.user);
+  try {
+    const adminId = resolveAdminId(req.user);
 
-  const employees = await User.find({
-    createdBy: adminId,
-    role: "EMPLOYEE",
-  }).select("_id profile employeeId");
+    console.log("🔍 WFH EMPLOYEE LIST");
+    console.log("USER:", req.user._id, req.user.role);
+    console.log("ADMIN ID:", adminId);
 
-  res.json({ employees });
+    const employees = await User.find({
+      role: { $in: ["EMPLOYEE", "employee"] },
+      $or: [
+        { createdBy: adminId },
+        { createdBy: { $exists: false } },
+        { createdBy: null },
+      ],
+    }).select("_id profile employeeId attendancePolicy");
+
+    console.log("EMP COUNT:", employees.length);
+
+    res.json({ employees });
+  } catch (err) {
+    console.error("getManageEmployeesAll error:", err);
+    res.status(500).json({ message: "Failed to load employees" });
+  }
 }
 
 /* =========================================================
@@ -488,5 +538,35 @@ export async function getManageAttendance(req, res) {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to load manage attendance" });
+  }
+}
+//Work from home attendance controller functions can be added below
+export async function updateEmployeeAttendancePolicy(req, res) {
+  try {
+    const adminId = resolveAdminId(req.user);
+    const { employeeId, attendancePolicy } = req.body;
+
+    if (!employeeId || !attendancePolicy) {
+      return res.status(400).json({ message: "employeeId and attendancePolicy required" });
+    }
+
+    // ✅ only employees under this admin (or legacy)
+    const emp = await User.findOne({
+      _id: employeeId,
+      role: "EMPLOYEE",
+      $or: [{ createdBy: adminId }, { createdBy: { $exists: false } }, { createdBy: null }],
+    });
+
+    if (!emp) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    emp.attendancePolicy = attendancePolicy; // "ANYWHERE" | "OFFICE_ONLY"
+    await emp.save();
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("updateEmployeeAttendancePolicy:", err);
+    res.status(500).json({ message: "Server error" });
   }
 }
