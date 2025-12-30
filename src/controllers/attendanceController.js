@@ -339,19 +339,21 @@ export async function markAttendance(req, res) {
     }
 
     /* ================= WFH / ZONE POLICY ================= */
-    if (user.attendancePolicy !== "ANYWHERE") {
-      const allowed = isInsideAnyZone({
-        lat,
-        lng,
-        zones: settings.zones || [],
-      });
+    const employee = await User.findById(user._id).select("attendancePolicy");
 
-      if (!allowed) {
-        return res.status(403).json({
-          message: "You are outside the allowed office location",
-        });
-      }
-    }
+if (employee?.attendancePolicy !== "ANYWHERE") {
+  const allowed = isInsideAnyZone({
+    lat,
+    lng,
+    zones: settings.zones || [],
+  });
+
+  if (!allowed) {
+    return res.status(403).json({
+      message: "You are outside the allowed office location",
+    });
+  }
+}
 
     /* ================= DATE ================= */
     const today = formatISTDate();
@@ -392,24 +394,28 @@ export async function markAttendance(req, res) {
     });
   }
 
-  if (record.clockOut) {
+  const outTime = formatISTTime();
+
+  // ⛔ BLOCK instant punch-out (same minute)
+  const inMin = timeToMinutes(record.clockIn);
+  const outMin = timeToMinutes(outTime);
+
+  if (outMin <= inMin) {
     return res.status(400).json({
-      message: "Already punched out for today",
+      message: "Punch-out too soon. Minimum working time required.",
     });
   }
-
-  const outTime = formatISTTime();
 
   record.clockOut = outTime;
   record.latOut = lat;
   record.lngOut = lng;
 
-  // 🔥 TOTAL TIME CALCULATION (MAIN FIX)
   record.totalHours = calculateTotalHours(
     record.clockIn,
     outTime
   );
 }
+
 
 
     await record.save();
@@ -428,7 +434,7 @@ export async function markAttendance(req, res) {
 
 export async function getTodayAttendance(req, res) {
   const adminId = resolveAdminId(req.user);
-  const today = formatDate(new Date());
+  const today = formatISTDate();
 
   const a = await Attendance.findOne({
     employeeId: req.user._id,
