@@ -46,12 +46,11 @@ const httpServer = http.createServer(app);
 ===================================================== */
 export const allowedOrigins = [
   "http://localhost:5173",
-  "http://crm-hrx8.onrender.com",
-  "https://crm-hrx8.onrender.com",
+  "https://nexpulse-fm96q7yep-sstpls-projects.vercel.app",
   "https://nexpulse.sstpltech.com",
   "https://www.nexpulse.sstpltech.com",
   "http://nexpulse.sstpltech.com",
-  "https://crm-hrx8.onrender.com:443", // ✅ ADD THIS
+   // ✅ ADD THIS
 ];
 
 app.use(
