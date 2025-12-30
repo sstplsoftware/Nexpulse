@@ -65,6 +65,20 @@ function isInsideAnyZone({ lat, lng, zones = [] }) {
     return distance <= (z.radius || 100);
   });
 }
+function calculateTotalHours(clockIn, clockOut) {
+  if (!clockIn || !clockOut) return "--";
+
+  const inMin = timeToMinutes(clockIn);
+  const outMin = timeToMinutes(clockOut);
+
+  if (outMin <= inMin) return "--";
+
+  const diff = outMin - inMin;
+  const h = Math.floor(diff / 60);
+  const m = diff % 60;
+
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
 
 
 /* =========================================================
@@ -349,12 +363,13 @@ export async function markAttendance(req, res) {
     });
 
     if (!record) {
-      record = new Attendance({
-        employeeId: user._id,
-        adminId,
-        date: today,
-      });
-    }
+  record = new Attendance({
+    employeeId: user._id,
+    adminId,
+    date: today,
+    totalHours: "--",
+  });
+}
 
     /* ================= PUNCH LOGIC ================= */
     if (status === "IN") {
@@ -371,22 +386,31 @@ export async function markAttendance(req, res) {
     }
 
     if (status === "OUT") {
-      if (!record.clockIn) {
-        return res.status(400).json({
-          message: "Punch-in required before punch-out",
-        });
-      }
+  if (!record.clockIn) {
+    return res.status(400).json({
+      message: "Punch-in required before punch-out",
+    });
+  }
 
-      if (record.clockOut) {
-        return res.status(400).json({
-          message: "Already punched out for today",
-        });
-      }
+  if (record.clockOut) {
+    return res.status(400).json({
+      message: "Already punched out for today",
+    });
+  }
 
-      record.clockOut = formatISTTime();
-      record.latOut = lat;
-      record.lngOut = lng;
-    }
+  const outTime = formatISTTime();
+
+  record.clockOut = outTime;
+  record.latOut = lat;
+  record.lngOut = lng;
+
+  // 🔥 TOTAL TIME CALCULATION (MAIN FIX)
+  record.totalHours = calculateTotalHours(
+    record.clockIn,
+    outTime
+  );
+}
+
 
     await record.save();
     return res.json({ ok: true });
